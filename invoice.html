@@ -127,11 +127,13 @@ textarea{resize:vertical;min-height:75px}
         </div>
         <div class="scan-wrap" onclick="startCamera()" style="padding:16px">
           <div style="font-size:32px">📷</div>
-          <div style="color:#888;font-size:13px;margin:6px 0">即時鏡頭掃描</div>
-          <div style="font-size:11px;color:#bbb">開啟相機對準發票</div>
+          <div style="color:#888;font-size:13px;margin:6px 0" id="cameraLabel">即時鏡頭掃描</div>
+          <div style="font-size:11px;color:#bbb" id="cameraDesc">開啟相機對準發票</div>
         </div>
       </div>
     </div>
+    <!-- 手機拍照用（隱藏） -->
+    <input type="file" id="mobileCameraInput" accept="image/*" capture="environment" style="display:none">
 
     <!-- 相機預覽 -->
     <div id="cameraWrap" style="display:none;text-align:center">
@@ -268,7 +270,25 @@ function resetScan(){
 
 // ── 即時相機 ──
 let cameraStream=null;
+const isMobile=/Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+// 初始化：手機顯示不同文字
+(function(){
+  if(isMobile){
+    const lbl=document.getElementById('cameraLabel');
+    const desc=document.getElementById('cameraDesc');
+    if(lbl)lbl.textContent='拍照掃描';
+    if(desc)desc.textContent='開啟相機直接拍攝發票';
+  }
+})();
+
 async function startCamera(){
+  // 手機：直接用原生相機（最穩定，支援所有手機）
+  if(isMobile){
+    document.getElementById('mobileCameraInput').click();
+    return;
+  }
+  // 電腦：使用即時影像串流
   const wrap=document.getElementById('cameraWrap');
   const video=document.getElementById('cameraVideo');
   document.getElementById('scanEmpty').style.display='none';
@@ -279,7 +299,8 @@ async function startCamera(){
     });
     video.srcObject=cameraStream;
   }catch(err){
-    alert('無法開啟相機：'+err.message+'\n請使用「選擇照片」方式上傳。');
+    // 電腦也失敗時，改用檔案選取
+    alert('無法開啟相機，請改用「選擇照片」。\n原因：'+err.message);
     stopCamera();
     document.getElementById('scanEmpty').style.display='block';
   }
@@ -337,19 +358,24 @@ async function runOCR(file){
   }
 }
 
-document.getElementById('scanInput').addEventListener('change',async e=>{
-  const file=e.target.files[0];if(!file)return;
+// 共用：選圖/手機拍照 → 預覽 + OCR + 存入稽核清單
+async function handleScanFile(file){
+  if(!file)return;
   document.getElementById('scanEmpty').style.display='none';
   document.getElementById('scanActive').style.display='block';
   const reader=new FileReader();
   reader.onload=ev=>{
     document.getElementById('scanImg').src=ev.target.result;
-    // 掃描辨識完成後自動存入照片清單（稽核用）
     if(window.addScanPhotoToList) window.addScanPhotoToList(ev.target.result);
   };
   reader.readAsDataURL(file);
   await runOCR(file);
-  e.target.value='';
+}
+document.getElementById('scanInput').addEventListener('change',async e=>{
+  await handleScanFile(e.target.files[0]);e.target.value='';
+});
+document.getElementById('mobileCameraInput').addEventListener('change',async e=>{
+  await handleScanFile(e.target.files[0]);e.target.value='';
 });
 </script>
 
