@@ -295,12 +295,14 @@ async function captureCamera(){
   canvas.height=video.videoHeight;
   canvas.getContext('2d').drawImage(video,0,0);
   stopCamera();
-  // 轉成 Blob 送 OCR
+  const dataUrl=canvas.toDataURL('image/jpeg',0.92);
   canvas.toBlob(async blob=>{
     document.getElementById('scanEmpty').style.display='none';
     document.getElementById('scanActive').style.display='block';
-    document.getElementById('scanImg').src=canvas.toDataURL('image/jpeg',0.9);
+    document.getElementById('scanImg').src=dataUrl;
     await runOCR(blob);
+    // 掃描完成後自動存入照片清單（稽核用）
+    if(window.addScanPhotoToList) window.addScanPhotoToList(dataUrl);
   },'image/jpeg',0.92);
 }
 async function runOCR(file){
@@ -340,7 +342,11 @@ document.getElementById('scanInput').addEventListener('change',async e=>{
   document.getElementById('scanEmpty').style.display='none';
   document.getElementById('scanActive').style.display='block';
   const reader=new FileReader();
-  reader.onload=ev=>document.getElementById('scanImg').src=ev.target.result;
+  reader.onload=ev=>{
+    document.getElementById('scanImg').src=ev.target.result;
+    // 掃描辨識完成後自動存入照片清單（稽核用）
+    if(window.addScanPhotoToList) window.addScanPhotoToList(ev.target.result);
+  };
   reader.readAsDataURL(file);
   await runOCR(file);
   e.target.value='';
@@ -378,9 +384,24 @@ async function addFiles(fs){
   updPCnt();fi.value='';
 }
 function compress(file){return new Promise(r=>{const rd=new FileReader();rd.onload=e=>{const img=new Image();img.onload=()=>{let w=img.width,h=img.height;if(w>MAX_W){h=Math.round(h*MAX_W/w);w=MAX_W;}const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);r(c.toDataURL('image/jpeg',QUAL));};img.src=e.target.result;};rd.readAsDataURL(file);})}
-function addPreview(url,idx){const d=document.createElement('div');d.className='pi';d.dataset.idx=idx;d.innerHTML=`<img src="${url}"><button class="pi-del" data-idx="${idx}">✕</button>`;pg.appendChild(d);}
+function addPreview(url,idx,label=''){
+  const d=document.createElement('div');d.className='pi';d.dataset.idx=idx;
+  d.innerHTML=`<img src="${url}">${label?`<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(233,69,96,.85);color:#fff;font-size:10px;font-weight:700;padding:2px 4px;text-align:center">${label}</div>`:''}<button class="pi-del" data-idx="${idx}">✕</button>`;
+  pg.appendChild(d);
+}
 pg.addEventListener('click',e=>{if(e.target.classList.contains('pi-del')){const i=+e.target.dataset.idx;photos[i]=null;e.target.closest('.pi').remove();updPCnt();}});
-function updPCnt(){const n=photos.filter(Boolean).length;document.getElementById('pcnt').textContent=n?`已選 ${n} 張（已壓縮）`:'';}
+function updPCnt(){const n=photos.filter(Boolean).length;document.getElementById('pcnt').textContent=n?`已選 ${n} 張（含掃描照片，已壓縮）`:'';}
+
+// 供 OCR script 呼叫：將掃描照片加入送出清單
+window.addScanPhotoToList=function(dataUrl){
+  if(photos.filter(Boolean).length>=MAX_P){showToast('照片已達上限 5 張',true);return;}
+  photos.push(dataUrl);
+  addPreview(dataUrl,photos.length-1,'📷 掃描');
+  updPCnt();
+  // 捲動到照片區讓使用者知道已存入
+  document.getElementById('previewGrid').scrollIntoView({behavior:'smooth',block:'nearest'});
+  showToast('📷 掃描照片已存入，將隨請款單一起上傳');
+};
 
 // 送出
 document.getElementById('form').addEventListener('submit',async e=>{
