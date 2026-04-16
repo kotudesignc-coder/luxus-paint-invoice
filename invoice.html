@@ -211,10 +211,13 @@ function parseAmount(t){
   return null;
 }
 function parseTaxId(t){
-  let m=t.match(/(?:統一編號|統編|買方統編|買受人統編)[:\s：]*(\d{8})/);
+  // 只抓買方統編（公司申請報帳用）
+  let m=t.match(/(?:買方統編|買方統一編號|買受人統編|買受人統一編號|買方)[:\s：]*(\d{8})/);
   if(m)return m[1];
-  const all=[...t.matchAll(/\b(\d{8})\b/g)];
-  return all.length?all[0][1]:null;
+  // 次要：若有明確「統一編號」標籤也抓（通常是買方欄位）
+  m=t.match(/統一編號[:\s：]*(\d{8})/);
+  if(m)return m[1];
+  return null; // 找不到買方統編就不填，避免填入賣方統編
 }
 function parseInvoiceNo(t){
   // 台灣統一發票號碼：2個英文字母 + 8位數字，如 AB-12345678 或 AB12345678
