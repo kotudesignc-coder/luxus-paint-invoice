@@ -216,6 +216,16 @@ function parseTaxId(t){
   const all=[...t.matchAll(/\b(\d{8})\b/g)];
   return all.length?all[0][1]:null;
 }
+function parseInvoiceNo(t){
+  // 台灣統一發票號碼：2個英文字母 + 8位數字，如 AB-12345678 或 AB12345678
+  let m=t.match(/[A-Za-z]{2}[-\s]?\d{8}/);
+  if(m){
+    const raw=m[0].replace(/\s/g,'').toUpperCase();
+    // 格式化為 XX-XXXXXXXX
+    return raw.slice(0,2)+'-'+raw.replace(/[^0-9]/g,'');
+  }
+  return null;
+}
 function resetScan(){
   document.getElementById('scanEmpty').style.display='block';
   document.getElementById('scanActive').style.display='none';
@@ -241,7 +251,7 @@ document.getElementById('scanInput').addEventListener('change',async e=>{
         else{txt.textContent=m.status||'處理中...';}
       }
     });
-    const d=parseROCDate(text),a=parseAmount(text),tid=parseTaxId(text);
+    const d=parseROCDate(text),a=parseAmount(text),tid=parseTaxId(text),inv=parseInvoiceNo(text);
     const rows=[];
     if(d){document.getElementById('date').value=d;rows.push(`✅ 發票日期：${d}`);}
     else rows.push('❓ 發票日期：未找到，請手動填寫');
@@ -249,6 +259,8 @@ document.getElementById('scanInput').addEventListener('change',async e=>{
     else rows.push('❓ 金額：未找到，請手動填寫');
     if(tid){document.getElementById('taxId').value=tid;rows.push(`✅ 統編：${tid}`);}
     else rows.push('❓ 統編：未找到，請手動填寫');
+    if(inv){document.getElementById('invoiceNo').value=inv;rows.push(`✅ 發票號碼：${inv}`);}
+    else rows.push('❓ 發票號碼：未找到，請手動填寫');
     box.innerHTML=rows.map(r=>`<div class="scan-result-row">${r}</div>`).join('');
     prog.style.display='none';box.style.display='block';
   }catch(err){
