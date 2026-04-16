@@ -1,0 +1,11 @@
+node_modules/
+*.pdf
+*.pptx
+*.py
+*.js
+package.json
+package-lock.json
+藝術塗料*
+WTC_Protection*
+research_report*
+make_*

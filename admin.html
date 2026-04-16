@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>LUXUS PAINT 後台管理</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI','Microsoft JhengHei',sans-serif;background:#f0f2f5;min-height:100vh}
+
+/* ── 登入畫面 ── */
+.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1a1a2e,#16213e)}
+.login-card{background:#fff;border-radius:20px;padding:40px 36px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.login-logo{text-align:center;margin-bottom:24px}
+.login-logo .mark{width:60px;height:60px;background:linear-gradient(135deg,#e94560,#f5a623);border-radius:16px;margin:0 auto 10px;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:900;color:#fff}
+.login-logo h1{font-size:18px;font-weight:700;color:#1a1a2e}.login-logo p{font-size:13px;color:#888;margin-top:2px}
+.login-form .fg{margin-bottom:14px}
+.login-form label{font-size:13px;font-weight:600;color:#555;display:block;margin-bottom:5px}
+.login-form input{width:100%;border:1.5px solid #e0e0e0;border-radius:10px;padding:11px 14px;font-size:14px;outline:none;transition:.2s}
+.login-form input:focus{border-color:#e94560;box-shadow:0 0 0 3px rgba(233,69,96,.1)}
+.login-err{color:#e74c3c;font-size:13px;margin-bottom:10px;display:none}
+.btn-login{width:100%;padding:13px;background:linear-gradient(135deg,#e94560,#c73652);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;margin-top:4px;transition:.2s}
+.btn-login:hover{opacity:.9}.btn-login:disabled{background:#ccc;cursor:not-allowed}
+
+/* ── 未授權畫面 ── */
+.unauth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f0f2f5}
+.unauth-card{background:#fff;border-radius:16px;padding:32px;max-width:480px;width:100%;box-shadow:0 4px 20px rgba(0,0,0,.08);text-align:center}
+.uid-box{background:#f8f9fa;border-radius:10px;padding:12px 16px;font-family:monospace;font-size:13px;word-break:break-all;margin:12px 0;cursor:pointer;border:1.5px dashed #ccc}
+.uid-box:hover{border-color:#e94560}
+.btn-invite{background:linear-gradient(135deg,#e94560,#c73652);color:#fff;border:none;padding:10px 24px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;margin-top:10px}
+.invite-input-row{display:flex;gap:8px;margin-top:12px}
+.invite-input-row input{flex:1;border:1.5px solid #e0e0e0;border-radius:8px;padding:9px 12px;font-size:14px;outline:none}
+.btn-join{background:#1a1a2e;color:#fff;border:none;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer}
+
+/* ── 主版面 ── */
+#mainApp{display:none}
+.top-bar{background:#1a1a2e;color:#fff;padding:0 24px;display:flex;align-items:center;height:56px;gap:16px;position:sticky;top:0;z-index:100;box-shadow:0 2px 10px rgba(0,0,0,.3)}
+.tb-logo{font-weight:900;font-size:15px;display:flex;align-items:center;gap:8px}
+.tb-logo .mk{width:32px;height:32px;background:linear-gradient(135deg,#e94560,#f5a623);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px}
+.tb-nav{display:flex;gap:4px;margin-left:16px}
+.tb-nav button{background:none;border:none;color:rgba(255,255,255,.7);padding:8px 14px;border-radius:8px;font-size:13px;cursor:pointer;transition:.2s;position:relative}
+.tb-nav button:hover,.tb-nav button.active{background:rgba(255,255,255,.15);color:#fff}
+.tb-badge{position:absolute;top:4px;right:4px;background:#e94560;color:#fff;border-radius:50%;width:16px;height:16px;font-size:10px;display:flex;align-items:center;justify-content:center;font-weight:700}
+.tb-user{margin-left:auto;font-size:13px;opacity:.8;display:flex;align-items:center;gap:10px}
+.btn-logout{background:rgba(255,255,255,.1);border:none;color:#fff;padding:6px 12px;border-radius:7px;font-size:12px;cursor:pointer}
+.btn-logout:hover{background:rgba(255,255,255,.2)}
+.content{max-width:1100px;margin:0 auto;padding:24px 16px}
+
+/* ── 儀表板 ── */
+.dash-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}
+@media(max-width:700px){.dash-grid{grid-template-columns:repeat(2,1fr)}}
+.dc{background:#fff;border-radius:14px;padding:18px;box-shadow:0 2px 12px rgba(0,0,0,.07);border-left:4px solid #e94560}
+.dc.g{border-color:#27ae60}.dc.b{border-color:#3498db}.dc.o{border-color:#f5a623}
+.dc-v{font-size:26px;font-weight:800;color:#1a1a2e}.dc-l{font-size:12px;color:#888;margin-top:4px}
+
+/* ── 卡片 ── */
+.card{background:#fff;border-radius:16px;padding:22px;box-shadow:0 2px 14px rgba(0,0,0,.07);margin-bottom:20px}
+.card-title{font-size:15px;font-weight:700;color:#1a1a2e;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.card-title::before{content:'';width:4px;height:18px;background:linear-gradient(135deg,#e94560,#f5a623);border-radius:2px}
+
+/* ── 篩選 ── */
+.filter-bar{background:#fff;border-radius:14px;padding:16px 20px;box-shadow:0 2px 12px rgba(0,0,0,.07);margin-bottom:18px;display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+.ffg{display:flex;flex-direction:column;gap:4px;flex:1;min-width:110px}
+.ffg label{font-size:12px;font-weight:600;color:#666}
+.ffg input,.ffg select{border:1.5px solid #e0e0e0;border-radius:8px;padding:7px 10px;font-size:13px;outline:none;background:#fff}
+.btn-dl{padding:8px 14px;background:linear-gradient(135deg,#27ae60,#1e8449);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+.btn-cl{padding:8px 12px;background:#f5f5f5;color:#666;border:none;border-radius:8px;font-size:12px;cursor:pointer}
+
+/* ── 表格 ── */
+.inv-table{width:100%;border-collapse:collapse}
+.inv-table th{text-align:left;padding:10px 12px;font-size:12px;font-weight:700;color:#888;border-bottom:2px solid #f0f0f0;white-space:nowrap}
+.inv-table td{padding:12px;font-size:13px;border-bottom:1px solid #f5f5f5;vertical-align:middle}
+.inv-table tr:hover td{background:#fafafa}
+.inv-table .name{font-weight:600;color:#1a1a2e}
+.inv-table .amount{font-weight:700;color:#1a1a2e}
+.btn-review{background:linear-gradient(135deg,#e94560,#c73652);color:#fff;border:none;padding:5px 12px;border-radius:7px;font-size:12px;cursor:pointer;font-weight:600;white-space:nowrap}
+.btn-review:hover{opacity:.88}
+
+/* ── 狀態標籤 ── */
+.badge{display:inline-flex;align-items:center;gap:3px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
+.b-p{background:#fff3cd;color:#856404}
+.b-a{background:#d1e7dd;color:#0a3622}
+.b-r{background:#f8d7da;color:#842029}
+.b-pd{background:#cfe2ff;color:#084298}
+
+/* ── 審查Modal ── */
+.modal-wrap{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:center;justify-content:center;padding:16px}
+.modal-wrap.open{display:flex}
+.modal-box{background:#fff;border-radius:20px;width:100%;max-width:700px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.modal-hd{padding:20px 24px 16px;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:#fff;border-radius:20px 20px 0 0;z-index:1}
+.modal-hd h3{font-size:16px;font-weight:700;color:#1a1a2e}
+.btn-mclose{background:none;border:none;font-size:22px;cursor:pointer;color:#888}
+.modal-body{padding:20px 24px}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+@media(max-width:500px){.info-grid{grid-template-columns:1fr}}
+.info-item label{font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px}
+.info-item .val{font-size:15px;font-weight:600;color:#1a1a2e;margin-top:3px}
+.info-item.full{grid-column:1/-1}
+.photo-strip{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.photo-strip img{width:72px;height:72px;border-radius:8px;object-fit:cover;cursor:pointer;border:2px solid #f0f0f0}
+.photo-strip img:hover{border-color:#e94560}
+.review-section{border-top:1px solid #f0f0f0;padding-top:16px}
+.review-section h4{font-size:13px;font-weight:700;color:#555;margin-bottom:12px}
+textarea.note{width:100%;border:1.5px solid #e0e0e0;border-radius:10px;padding:10px;font-size:13px;font-family:inherit;resize:vertical;min-height:70px;outline:none}
+textarea.note:focus{border-color:#e94560}
+.action-row{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+.btn-approve{background:linear-gradient(135deg,#27ae60,#1e8449);color:#fff;border:none;padding:11px 22px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;flex:1}
+.btn-reject{background:linear-gradient(135deg,#e74c3c,#c0392b);color:#fff;border:none;padding:11px 22px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;flex:1}
+.btn-paid{background:linear-gradient(135deg,#3498db,#2980b9);color:#fff;border:none;padding:11px 22px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;flex:1}
+.btn-repending{background:#f5f5f5;color:#555;border:none;padding:11px 18px;border-radius:10px;font-size:13px;cursor:pointer}
+.btn-email{background:none;border:1.5px solid #e94560;color:#e94560;padding:9px 18px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:5px}
+
+/* ── 月報表 ── */
+.month-picker{display:flex;gap:10px;align-items:center;margin-bottom:20px;flex-wrap:wrap}
+.month-picker select{border:1.5px solid #e0e0e0;border-radius:8px;padding:8px 12px;font-size:14px;outline:none}
+.report-table{width:100%;border-collapse:collapse}
+.report-table th{text-align:left;padding:10px 14px;font-size:12px;font-weight:700;color:#888;border-bottom:2px solid #f0f0f0}
+.report-table td{padding:12px 14px;font-size:13px;border-bottom:1px solid #f5f5f5}
+.report-table .total-row td{font-weight:700;color:#1a1a2e;background:#fff8f9;border-top:2px solid #f0d0d6}
+.report-table .detail-row td{font-size:12px;color:#888;padding:6px 14px 6px 28px;background:#fafafa}
+
+/* ── 管理員管理 ── */
+.admin-list{display:flex;flex-direction:column;gap:10px}
+.admin-item{background:#f8f9fa;border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:12px}
+.admin-avatar{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#e94560,#f5a623);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:16px}
+.admin-info .name{font-weight:700;font-size:14px;color:#1a1a2e}
+.admin-info .role{font-size:12px;color:#888}
+.role-badge{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
+.role-boss{background:#fff3cd;color:#856404}.role-acc{background:#d1e7dd;color:#0a3622}
+.btn-del-admin{background:#f8d7da;color:#842029;border:none;padding:5px 12px;border-radius:7px;font-size:12px;cursor:pointer;font-weight:600;margin-left:auto}
+.add-admin-box{border:2px dashed #d0d0d0;border-radius:12px;padding:20px;margin-top:12px}
+.add-admin-box h4{font-size:13px;font-weight:700;color:#555;margin-bottom:12px}
+.add-row{display:flex;gap:8px;flex-wrap:wrap}
+.add-row input,.add-row select{flex:1;min-width:120px;border:1.5px solid #e0e0e0;border-radius:8px;padding:9px 12px;font-size:13px;outline:none}
+.btn-add-admin{background:#1a1a2e;color:#fff;border:none;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer}
+
+/* ── 輔助 ── */
+.toast{position:fixed;top:20px;right:20px;background:#27ae60;color:#fff;padding:12px 20px;border-radius:12px;font-weight:600;font-size:14px;box-shadow:0 4px 20px rgba(0,0,0,.2);transform:translateX(120%);transition:transform .3s;z-index:9999}
+.toast.show{transform:translateX(0)}.toast.err{background:#e74c3c}
+.lb{display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9998;align-items:center;justify-content:center;flex-direction:column}
+.lb.open{display:flex}
+.lb img{max-width:92vw;max-height:85vh;border-radius:8px;object-fit:contain}
+.lb-x{position:absolute;top:16px;right:20px;color:#fff;font-size:32px;cursor:pointer;background:none;border:none}
+.lb-nav button{background:rgba(255,255,255,.2);border:none;color:#fff;padding:7px 18px;border-radius:8px;cursor:pointer;font-size:13px}
+.lb-nav{display:flex;gap:14px;margin-top:12px}
+.empty{text-align:center;padding:36px;color:#bbb}.empty .ei{font-size:40px;margin-bottom:8px}
+.tab-section{display:none}.tab-section.active{display:block}
+.live-dot{width:8px;height:8px;background:#27ae60;border-radius:50%;display:inline-block;animation:pulse 1.5s infinite;margin-left:4px}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.8)}}
+.section-desc{font-size:13px;color:#888;margin-bottom:16px}
+</style>
+</head>
+<body>
+
+<!-- 登入 -->
+<div id="loginWrap" class="login-wrap">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="mark">LP</div>
+      <h1>LUXUS PAINT 後台</h1>
+      <p>請輸入管理員帳號登入</p>
+    </div>
+    <div class="login-form">
+      <div id="loginErr" class="login-err">帳號或密碼錯誤，請再試一次</div>
+      <div class="fg"><label>電子信箱</label><input type="email" id="loginEmail" placeholder="admin@luxuspaint.com"></div>
+      <div class="fg"><label>密碼</label><input type="password" id="loginPwd" placeholder="••••••••"></div>
+      <button class="btn-login" id="btnLogin">登入後台</button>
+      <div style="text-align:center;margin-top:14px;font-size:12px;color:#aaa">
+        <a href="invoice.html" style="color:#e94560;text-decoration:none">← 返回員工申請頁</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 未授權 -->
+<div id="unauthWrap" class="unauth-wrap" style="display:none">
+  <div class="unauth-card">
+    <div style="font-size:48px;margin-bottom:12px">🔒</div>
+    <h2 style="font-size:18px;font-weight:700;margin-bottom:8px">尚未獲得後台權限</h2>
+    <p style="font-size:13px;color:#888;margin-bottom:16px">您已登入，但尚未被授予後台管理權限。</p>
+    <p style="font-size:13px;color:#555;margin-bottom:8px">您的帳號 UID（點擊複製）：</p>
+    <div class="uid-box" id="uidBox" title="點擊複製">—</div>
+    <p style="font-size:12px;color:#aaa;margin-bottom:16px">請將此 UID 提供給已有權限的管理員，或輸入邀請碼自助開通：</p>
+    <div class="invite-input-row">
+      <input type="text" id="inviteCodeInput" placeholder="輸入邀請碼">
+      <button class="btn-join" id="btnJoin">開通</button>
+    </div>
+    <div id="inviteErr" style="font-size:12px;color:#e74c3c;margin-top:8px;display:none">邀請碼無效或已過期</div>
+    <div style="margin-top:20px"><button onclick="doLogout()" style="background:none;border:none;color:#aaa;font-size:13px;cursor:pointer">登出</button></div>
+  </div>
+</div>
+
+<!-- 主應用 -->
+<div id="mainApp">
+  <div class="top-bar">
+    <div class="tb-logo"><div class="mk">LP</div>LUXUS PAINT 後台</div>
+    <div class="tb-nav">
+      <button class="active" data-tab="dash" onclick="switchTab('dash',this)">儀表板</button>
+      <button data-tab="pending" onclick="switchTab('pending',this)">待審請款 <span class="tb-badge" id="pendingBadge" style="display:none">0</span></button>
+      <button data-tab="all" onclick="switchTab('all',this)">全部紀錄</button>
+      <button data-tab="report" onclick="switchTab('report',this)">月份報表</button>
+      <button id="adminTabBtn" data-tab="admins" onclick="switchTab('admins',this)" style="display:none">後台管理</button>
+    </div>
+    <div class="tb-user">
+      <span id="userEmail" style="display:none;max-width:160px;overflow:hidden;text-overflow:ellipsis"></span>
+      <button class="btn-logout" onclick="doLogout()">登出</button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- 儀表板 -->
+    <div class="tab-section active" id="tab-dash">
+      <div class="dash-grid">
+        <div class="dc"><div class="dc-v" id="d-pending">—</div><div class="dc-l">🕐 待審請款</div></div>
+        <div class="dc g"><div class="dc-v" id="d-approved">—</div><div class="dc-l">✅ 本月通過金額</div></div>
+        <div class="dc b"><div class="dc-v" id="d-paid">—</div><div class="dc-l">💰 本月已付款</div></div>
+        <div class="dc o"><div class="dc-v" id="d-rejected">—</div><div class="dc-l">❌ 本月退件數</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">最新待審請款 <span class="live-dot"></span></div>
+        <div id="dashPendingList"><div class="empty"><div class="ei">✅</div>目前無待審請款</div></div>
+      </div>
+    </div>
+
+    <!-- 待審 -->
+    <div class="tab-section" id="tab-pending">
+      <div class="filter-bar">
+        <div class="ffg"><label>申請人</label><input type="text" id="pf-name" placeholder="全部"></div>
+        <div class="ffg"><label>開始日期</label><input type="date" id="pf-start"></div>
+        <div class="ffg"><label>結束日期</label><input type="date" id="pf-end"></div>
+        <button class="btn-dl" id="pf-dl">⬇️ 匯出</button>
+        <button class="btn-cl" onclick="clearFilter('pf')">✕ 清除</button>
+      </div>
+      <div class="card">
+        <div class="card-title">待審請款清單</div>
+        <div style="overflow-x:auto">
+          <table class="inv-table" id="pendingTable">
+            <thead><tr><th>申請日期</th><th>申請人</th><th>發票日期</th><th>發票號碼</th><th>統編</th><th>金額</th><th>用途</th><th>操作</th></tr></thead>
+            <tbody id="pendingBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 全部紀錄 -->
+    <div class="tab-section" id="tab-all">
+      <div class="filter-bar">
+        <div class="ffg"><label>申請人</label><input type="text" id="af-name" placeholder="全部"></div>
+        <div class="ffg"><label>狀態</label>
+          <select id="af-status">
+            <option value="">全部</option><option value="pending">審查中</option>
+            <option value="approved">通過</option><option value="rejected">退件</option><option value="paid">已付款</option>
+          </select>
+        </div>
+        <div class="ffg"><label>開始日期</label><input type="date" id="af-start"></div>
+        <div class="ffg"><label>結束日期</label><input type="date" id="af-end"></div>
+        <button class="btn-dl" id="af-dl">⬇️ 匯出</button>
+        <button class="btn-cl" onclick="clearFilter('af')">✕ 清除</button>
+      </div>
+      <div class="card">
+        <div class="card-title">全部請款紀錄</div>
+        <div style="overflow-x:auto">
+          <table class="inv-table">
+            <thead><tr><th>申請日期</th><th>申請人</th><th>信箱</th><th>金額</th><th>發票號碼</th><th>用途</th><th>狀態</th><th>審查人</th><th>操作</th></tr></thead>
+            <tbody id="allBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 月份報表 -->
+    <div class="tab-section" id="tab-report">
+      <div class="card">
+        <div class="card-title">月份薪資同步報表</div>
+        <p class="section-desc">統計各申請人本月通過請款，供發薪時同步放款參考。</p>
+        <div class="month-picker">
+          <select id="repYear" style="border:1.5px solid #e0e0e0;border-radius:8px;padding:8px 12px;font-size:14px;outline:none"></select>
+          <select id="repMonth" style="border:1.5px solid #e0e0e0;border-radius:8px;padding:8px 12px;font-size:14px;outline:none">
+            <option value="01">1月</option><option value="02">2月</option><option value="03">3月</option>
+            <option value="04">4月</option><option value="05">5月</option><option value="06">6月</option>
+            <option value="07">7月</option><option value="08">8月</option><option value="09">9月</option>
+            <option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
+          </select>
+          <button class="btn-dl" id="repDl">⬇️ 匯出報表</button>
+        </div>
+        <div style="overflow-x:auto"><table class="report-table" id="repTable">
+          <thead><tr><th>申請人</th><th>電子信箱</th><th>通過筆數</th><th>通過金額 (NT$)</th><th>已付款</th><th>待付款</th></tr></thead>
+          <tbody id="repBody"></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <!-- 後台管理 -->
+    <div class="tab-section" id="tab-admins">
+      <div class="card">
+        <div class="card-title">管理員名單</div>
+        <p class="section-desc">僅老闆帳號可新增或移除管理員。</p>
+        <div class="admin-list" id="adminList"></div>
+        <div class="add-admin-box" id="addAdminBox">
+          <h4>新增管理員</h4>
+          <div class="add-row">
+            <input type="text" id="newAdminUid" placeholder="新管理員的 Firebase UID">
+            <input type="text" id="newAdminName" placeholder="姓名">
+            <input type="email" id="newAdminEmail" placeholder="電子信箱">
+            <select id="newAdminRole"><option value="accountant">會計</option><option value="boss">老闆</option></select>
+            <button class="btn-add-admin" id="btnAddAdmin">新增</button>
+          </div>
+          <p style="font-size:11px;color:#aaa;margin-top:8px">💡 新管理員需先至員工申請頁登入，系統會顯示他的 UID，再填入上方欄位。</p>
+        </div>
+        <div class="add-admin-box" style="margin-top:12px">
+          <h4>邀請碼設定</h4>
+          <div class="add-row">
+            <input type="text" id="inviteCodeSet" placeholder="設定邀請碼（6-12 字）" maxlength="12">
+            <select id="inviteRoleSet"><option value="accountant">會計角色</option><option value="boss">老闆角色</option></select>
+            <button class="btn-add-admin" id="btnSetInvite">儲存邀請碼</button>
+          </div>
+          <p style="font-size:11px;color:#aaa;margin-top:8px">💡 將邀請碼給需要開通的管理員，他們登入後自助輸入即可開通。</p>
+          <div id="currentInvite" style="margin-top:8px;font-size:12px;color:#888"></div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /mainApp -->
+
+<!-- 審查 Modal -->
+<div class="modal-wrap" id="reviewModal">
+  <div class="modal-box">
+    <div class="modal-hd">
+      <h3>📋 請款審查</h3>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span id="modalBadge"></span>
+        <button class="btn-mclose" id="modalClose">✕</button>
+      </div>
+    </div>
+    <div class="modal-body">
+      <div class="info-grid">
+        <div class="info-item"><label>申請人</label><div class="val" id="m-applicant">—</div></div>
+        <div class="info-item"><label>電子信箱</label><div class="val" id="m-email">—</div></div>
+        <div class="info-item"><label>申請日期</label><div class="val" id="m-appDate">—</div></div>
+        <div class="info-item"><label>發票日期</label><div class="val" id="m-date">—</div></div>
+        <div class="info-item"><label>金額</label><div class="val" style="font-size:20px;font-weight:800;color:#e94560" id="m-amount">—</div></div>
+        <div class="info-item"><label>統編</label><div class="val" id="m-taxid">—</div></div>
+        <div class="info-item"><label>發票號碼</label><div class="val" id="m-invoiceno">—</div></div>
+        <div class="info-item"><label>狀態</label><div class="val" id="m-status">—</div></div>
+        <div class="info-item full"><label>用途說明</label><div class="val" id="m-purpose" style="white-space:pre-wrap">—</div></div>
+        <div class="info-item full" id="m-reviewInfo" style="display:none"><label>審查資訊</label><div class="val" id="m-reviewDetail">—</div></div>
+      </div>
+      <div id="m-photos" class="photo-strip"></div>
+      <div class="review-section">
+        <h4>審查操作</h4>
+        <textarea class="note" id="reviewNote" placeholder="審查備註（通過時選填，退件時必填原因）"></textarea>
+        <div style="margin-top:10px">
+          <label style="font-size:12px;font-weight:600;color:#555">發薪月份（通過時選填）</label>
+          <input type="month" id="paymentMonth" style="border:1.5px solid #e0e0e0;border-radius:8px;padding:7px 10px;font-size:13px;outline:none;margin-top:4px">
+        </div>
+        <div class="action-row">
+          <button class="btn-approve" id="btnApprove">✅ 通過</button>
+          <button class="btn-reject"  id="btnReject">❌ 退件</button>
+          <button class="btn-paid"   id="btnPaid">💰 標記已付款</button>
+          <button class="btn-repending" id="btnRePending">↩ 退回審查中</button>
+        </div>
+        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+          <a id="emailLink" class="btn-email" href="#" target="_blank">📧 發送通知給申請人</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Lightbox -->
+<div class="lb" id="lb">
+  <button class="lb-x" id="lbX">✕</button>
+  <img id="lbImg" src="" alt="">
+  <div class="lb-nav"><button id="lbP">◀ 上一張</button><button id="lbN">下一張 ▶</button></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import{initializeApp}from'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import{getAuth,signInWithEmailAndPassword,onAuthStateChanged,signOut}from'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+import{getFirestore,collection,doc,getDoc,getDocs,addDoc,onSnapshot,orderBy,query,updateDoc,deleteDoc,setDoc,serverTimestamp}from'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+const cfg={apiKey:"AIzaSyBKBZ8RDjqyZtCJA-B0oL2RaWlLI73dZQg",authDomain:"luxus-paint.firebaseapp.com",projectId:"luxus-paint",storageBucket:"luxus-paint.firebasestorage.app",messagingSenderId:"522125845472",appId:"1:522125845472:web:de306efe026c3f0eee4185"};
+const app=initializeApp(cfg);
+const auth=getAuth(app);
+const db=getFirestore(app);
+
+let currentUser=null,adminData=null,allDocs=[],modalDoc=null;
+
+// ── Auth ──
+document.getElementById('btnLogin').addEventListener('click',async()=>{
+  const btn=document.getElementById('btnLogin');
+  const em=document.getElementById('loginEmail').value.trim();
+  const pw=document.getElementById('loginPwd').value;
+  const errEl=document.getElementById('loginErr');
+  errEl.style.display='none';
+  if(!em||!pw)return;
+  btn.disabled=true;btn.textContent='登入中...';
+  try{await signInWithEmailAndPassword(auth,em,pw);}
+  catch{errEl.style.display='block';btn.disabled=false;btn.textContent='登入後台';}
+});
+['loginEmail','loginPwd'].forEach(id=>document.getElementById(id).addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('btnLogin').click();}));
+
+onAuthStateChanged(auth,async user=>{
+  document.getElementById('loginWrap').style.display='none';
+  document.getElementById('unauthWrap').style.display='none';
+  document.getElementById('mainApp').style.display='none';
+  if(!user){document.getElementById('loginWrap').style.display='flex';return;}
+  currentUser=user;
+  // 檢查管理員權限
+  const adSnap=await getDoc(doc(db,'admins',user.uid));
+  if(!adSnap.exists()){
+    // 未授權
+    document.getElementById('unauthWrap').style.display='flex';
+    const uidBox=document.getElementById('uidBox');
+    uidBox.textContent=user.uid;
+    uidBox.onclick=()=>{navigator.clipboard.writeText(user.uid);showToast('UID 已複製');};
+    loadInviteJoin(user);
+    return;
+  }
+  adminData=adSnap.data();
+  document.getElementById('userEmail').textContent=adminData.name||user.email;
+  document.getElementById('userEmail').style.display='block';
+  if(adminData.role==='boss'){
+    document.getElementById('adminTabBtn').style.display='block';
+  }
+  document.getElementById('mainApp').style.display='block';
+  startListening();
+  initMonthPicker();
+  initFilters();
+  initReport();
+  if(adminData.role==='boss')initAdminMgmt();
+});
+
+// 邀請碼自助開通
+async function loadInviteJoin(user){
+  document.getElementById('btnJoin').addEventListener('click',async()=>{
+    const code=document.getElementById('inviteCodeInput').value.trim();
+    const errEl=document.getElementById('inviteErr');
+    errEl.style.display='none';
+    if(!code)return;
+    try{
+      const invSnap=await getDoc(doc(db,'settings','invite'));
+      if(!invSnap.exists()||invSnap.data().code!==code){errEl.style.display='block';return;}
+      const inv=invSnap.data();
+      if(inv.expiresAt&&inv.expiresAt.toDate()<new Date()){errEl.textContent='邀請碼已過期';errEl.style.display='block';return;}
+      await setDoc(doc(db,'admins',user.uid),{name:user.displayName||user.email.split('@')[0],email:user.email,role:inv.role||'accountant',createdAt:serverTimestamp()});
+      showToast('✅ 開通成功！');
+      setTimeout(()=>location.reload(),1500);
+    }catch(e){errEl.textContent='開通失敗：'+e.message;errEl.style.display='block';}
+  });
+}
+
+window.doLogout=async()=>{await signOut(auth);location.reload();};
+
+// ── 即時監聽 ──
+function startListening(){
+  const q=query(collection(db,'invoices'),orderBy('createdAt','desc'));
+  onSnapshot(q,snap=>{
+    allDocs=snap.docs.map(d=>({id:d.id,...d.data()}));
+    renderAll();
+  });
+}
+
+// ── Tab ──
+window.switchTab=(id,btn)=>{
+  document.querySelectorAll('.tab-section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.tb-nav button').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  btn.classList.add('active');
+  if(id==='report')renderReport();
+  if(id==='admins')renderAdminList();
+};
+
+// ── 渲染全部 ──
+function renderAll(){renderDash();renderPending();renderAllTable();}
+
+// 狀態徽章
+function badge(s){
+  const m={pending:'<span class="badge b-p">🕐 審查中</span>',approved:'<span class="badge b-a">✅ 通過</span>',rejected:'<span class="badge b-r">❌ 退件</span>',paid:'<span class="badge b-pd">💰 已付款</span>'};
+  return m[s]||s;
+}
+function statusLabel(s){return{pending:'審查中',approved:'通過',rejected:'退件',paid:'已付款'}[s]||s;}
+function thisMonth(){const n=new Date();return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`;}
+
+// ── 儀表板 ──
+function renderDash(){
+  const ym=thisMonth();
+  const mo=allDocs.filter(d=>(d.applicationDate||'').startsWith(ym));
+  document.getElementById('d-pending').textContent=allDocs.filter(d=>d.status==='pending').length;
+  document.getElementById('d-approved').textContent='NT$'+mo.filter(d=>d.status==='approved'||d.status==='paid').reduce((s,d)=>s+(d.amount||0),0).toLocaleString();
+  document.getElementById('d-paid').textContent='NT$'+mo.filter(d=>d.status==='paid').reduce((s,d)=>s+(d.amount||0),0).toLocaleString();
+  document.getElementById('d-rejected').textContent=mo.filter(d=>d.status==='rejected').length;
+  const pb=document.getElementById('pendingBadge');
+  const pc=allDocs.filter(d=>d.status==='pending').length;
+  pb.textContent=pc;pb.style.display=pc?'flex':'none';
+  // 最新待審（前5筆）
+  const list=document.getElementById('dashPendingList');
+  const pend=allDocs.filter(d=>d.status==='pending').slice(0,5);
+  if(!pend.length){list.innerHTML='<div class="empty"><div class="ei">✅</div>目前無待審請款</div>';return;}
+  list.innerHTML=`<div style="overflow-x:auto"><table class="inv-table"><thead><tr><th>申請日期</th><th>申請人</th><th>金額</th><th>用途</th><th>操作</th></tr></thead><tbody>${
+    pend.map(d=>`<tr><td>${d.applicationDate||'—'}</td><td class="name">${d.applicant||'—'}</td><td class="amount">NT$ ${(d.amount||0).toLocaleString()}</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.purpose||'—'}</td><td><button class="btn-review" onclick="openModal('${d.id}')">審查</button></td></tr>`).join('')
+  }</tbody></table></div>`;
+}
+
+// ── 待審 ──
+function getPF(){
+  const nm=document.getElementById('pf-name').value.trim().toLowerCase();
+  const s=document.getElementById('pf-start').value;
+  const en=document.getElementById('pf-end').value;
+  return allDocs.filter(d=>{
+    if(d.status!=='pending')return false;
+    if(nm&&!(d.applicant||'').toLowerCase().includes(nm))return false;
+    if(s&&(d.applicationDate||'')<s)return false;
+    if(en&&(d.applicationDate||'')>en)return false;
+    return true;
+  });
+}
+function renderPending(){
+  const docs=getPF();
+  const tbody=document.getElementById('pendingBody');
+  if(!docs.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:24px;color:#aaa">🎉 目前無待審請款</td></tr>';return;}
+  tbody.innerHTML=docs.map(d=>`<tr>
+    <td>${d.applicationDate||'—'}</td>
+    <td class="name">${d.applicant||'—'}<br><span style="font-size:11px;color:#888">${d.email||''}</span></td>
+    <td>${d.date||'—'}</td><td>${d.invoiceNo||'—'}</td><td>${d.taxId||'—'}</td>
+    <td class="amount">NT$ ${(d.amount||0).toLocaleString()}</td>
+    <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.purpose||'—'}</td>
+    <td><button class="btn-review" onclick="openModal('${d.id}')">審查</button></td>
+  </tr>`).join('');
+}
+
+// ── 全部紀錄 ──
+function getAF(){
+  const nm=document.getElementById('af-name').value.trim().toLowerCase();
+  const st=document.getElementById('af-status').value;
+  const s=document.getElementById('af-start').value;
+  const en=document.getElementById('af-end').value;
+  return allDocs.filter(d=>{
+    if(nm&&!(d.applicant||'').toLowerCase().includes(nm))return false;
+    if(st&&d.status!==st)return false;
+    if(s&&(d.applicationDate||'')<s)return false;
+    if(en&&(d.applicationDate||'')>en)return false;
+    return true;
+  });
+}
+function renderAllTable(){
+  const docs=getAF();
+  const tbody=document.getElementById('allBody');
+  if(!docs.length){tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:24px;color:#aaa">無符合紀錄</td></tr>';return;}
+  tbody.innerHTML=docs.map(d=>`<tr>
+    <td>${d.applicationDate||'—'}</td>
+    <td class="name">${d.applicant||'—'}</td>
+    <td style="font-size:12px;color:#888">${d.email||'—'}</td>
+    <td class="amount">NT$ ${(d.amount||0).toLocaleString()}</td>
+    <td>${d.invoiceNo||'—'}</td>
+    <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.purpose||'—'}</td>
+    <td>${badge(d.status)}</td>
+    <td style="font-size:12px;color:#888">${d.reviewedByName||'—'}</td>
+    <td><button class="btn-review" onclick="openModal('${d.id}')">查看</button></td>
+  </tr>`).join('');
+}
+
+// 篩選事件
+function initFilters(){
+  ['pf-name','pf-start','pf-end'].forEach(id=>document.getElementById(id).addEventListener('input',renderPending));
+  ['af-name','af-status','af-start','af-end'].forEach(id=>document.getElementById(id).addEventListener('input',renderAllTable));
+  document.getElementById('pf-dl').addEventListener('click',()=>downloadCSV(getPF(),'待審'));
+  document.getElementById('af-dl').addEventListener('click',()=>downloadCSV(getAF(),'全部'));
+}
+window.clearFilter=(prefix)=>{
+  document.querySelectorAll(`[id^="${prefix}-"]`).forEach(el=>{if(el.tagName==='SELECT')el.value='';else el.value='';});
+  renderPending();renderAllTable();
+};
+
+// ── 下載 CSV ──
+function downloadCSV(docs,label){
+  if(!docs.length){showToast('沒有資料',true);return;}
+  const h=['申請日期','發票日期','金額(元)','統編','發票號碼','申請人','電子信箱','用途','狀態','退件原因','審查人','審查備註'];
+  const rows=docs.map(d=>[d.applicationDate||'',d.date||'',d.amount||0,d.taxId||'',`"${d.invoiceNo||''}"`,`"${d.applicant||''}"`,`"${d.email||''}"`,`"${(d.purpose||'').replace(/"/g,'""').replace(/\n/g,' ')}"`,statusLabel(d.status),`"${(d.rejectionReason||'').replace(/"/g,'""')}"`,d.reviewedByName||'',`"${(d.reviewNote||'').replace(/"/g,'""')}"`]);
+  const csv='\uFEFF'+[h,...rows].map(r=>r.join(',')).join('\r\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));
+  a.download=`LUXUS_請款_${label}_${new Date().toISOString().slice(0,10)}.csv`;a.click();
+  showToast(`✅ 匯出 ${docs.length} 筆`);
+}
+
+// ── 月份報表 ──
+function initMonthPicker(){
+  const yn=document.getElementById('repYear');
+  const now=new Date();
+  for(let y=now.getFullYear();y>=now.getFullYear()-3;y--){
+    const o=document.createElement('option');o.value=y;o.textContent=y+'年';yn.appendChild(o);
+  }
+  document.getElementById('repMonth').value=String(now.getMonth()+1).padStart(2,'0');
+  document.getElementById('repYear').addEventListener('change',renderReport);
+  document.getElementById('repMonth').addEventListener('change',renderReport);
+  document.getElementById('repDl').addEventListener('click',()=>{
+    const rows=getRepRows();
+    if(!rows.length){showToast('無資料',true);return;}
+    const h=['申請人','電子信箱','通過筆數','通過金額(NT$)','已付款(NT$)','待付款(NT$)'];
+    const body=rows.map(r=>[`"${r.name}"`,`"${r.email}"`,r.count,r.total,r.paid,r.unpaid]);
+    const csv='\uFEFF'+[h,...body].map(r=>r.join(',')).join('\r\n');
+    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));
+    a.download=`LUXUS_月報_${document.getElementById('repYear').value}-${document.getElementById('repMonth').value}.csv`;a.click();
+  });
+}
+function getRepRows(){
+  const ym=`${document.getElementById('repYear').value}-${document.getElementById('repMonth').value}`;
+  const mo=allDocs.filter(d=>(d.status==='approved'||d.status==='paid')&&(d.applicationDate||'').startsWith(ym));
+  const byP={};
+  mo.forEach(d=>{
+    const k=d.applicant||'未知';
+    if(!byP[k])byP[k]={name:k,email:d.email||'',count:0,total:0,paid:0,unpaid:0,invoices:[]};
+    byP[k].count++;byP[k].total+=(d.amount||0);
+    if(d.status==='paid')byP[k].paid+=(d.amount||0);else byP[k].unpaid+=(d.amount||0);
+    byP[k].invoices.push(d);
+  });
+  return Object.values(byP).sort((a,b)=>b.total-a.total);
+}
+function initReport(){document.getElementById('repYear').addEventListener('change',renderReport);document.getElementById('repMonth').addEventListener('change',renderReport);}
+function renderReport(){
+  const rows=getRepRows();
+  const tbody=document.getElementById('repBody');
+  if(!rows.length){tbody.innerHTML='<tr><td colspan="6" style="text-align:center;padding:24px;color:#aaa">此月份無通過請款</td></tr>';return;}
+  const grandTotal=rows.reduce((s,r)=>s+r.total,0);
+  const grandPaid=rows.reduce((s,r)=>s+r.paid,0);
+  const grandUnpaid=rows.reduce((s,r)=>s+r.unpaid,0);
+  tbody.innerHTML=rows.map(r=>`
+    <tr><td><strong>${r.name}</strong></td><td>${r.email}</td><td>${r.count} 筆</td>
+    <td><strong>NT$ ${r.total.toLocaleString()}</strong></td>
+    <td style="color:#3498db">NT$ ${r.paid.toLocaleString()}</td>
+    <td style="color:#e94560">NT$ ${r.unpaid.toLocaleString()}</td></tr>
+    ${r.invoices.map(d=>`<tr class="detail-row"><td colspan="2">${d.invoiceNo||'—'} / ${d.date||'—'}</td><td>1 筆</td><td>NT$ ${(d.amount||0).toLocaleString()}</td><td colspan="2" style="font-size:11px;color:#888">${d.purpose||''}</td></tr>`).join('')}
+  `).join('')+`<tr class="total-row"><td>合計</td><td></td><td>${rows.reduce((s,r)=>s+r.count,0)} 筆</td><td>NT$ ${grandTotal.toLocaleString()}</td><td>NT$ ${grandPaid.toLocaleString()}</td><td>NT$ ${grandUnpaid.toLocaleString()}</td></tr>`;
+}
+
+// ── 審查 Modal ──
+window.openModal=id=>{
+  const d=allDocs.find(x=>x.id===id);if(!d)return;
+  modalDoc=d;
+  document.getElementById('m-applicant').textContent=d.applicant||'—';
+  document.getElementById('m-email').textContent=d.email||'—';
+  document.getElementById('m-appDate').textContent=d.applicationDate||'—';
+  document.getElementById('m-date').textContent=d.date||'—';
+  document.getElementById('m-amount').textContent='NT$ '+(d.amount||0).toLocaleString()+' 元';
+  document.getElementById('m-taxid').textContent=d.taxId||'無';
+  document.getElementById('m-invoiceno').textContent=d.invoiceNo||'—';
+  document.getElementById('m-purpose').textContent=d.purpose||'—';
+  document.getElementById('modalBadge').innerHTML=badge(d.status);
+  document.getElementById('m-status').innerHTML=badge(d.status);
+  document.getElementById('reviewNote').value='';
+  document.getElementById('paymentMonth').value='';
+  // 審查資訊
+  const ri=document.getElementById('m-reviewInfo');
+  if(d.reviewedByName||d.rejectionReason){
+    ri.style.display='block';
+    let info=`審查人：${d.reviewedByName||'—'}`;
+    if(d.reviewedAt&&d.reviewedAt.toDate)info+=` ／ ${d.reviewedAt.toDate().toLocaleString('zh-TW')}`;
+    if(d.rejectionReason)info+=`\n退件原因：${d.rejectionReason}`;
+    if(d.reviewNote)info+=`\n備註：${d.reviewNote}`;
+    if(d.paymentMonth)info+=`\n發薪月份：${d.paymentMonth}`;
+    document.getElementById('m-reviewDetail').textContent=info;
+  }else ri.style.display='none';
+  // 照片
+  const ph=document.getElementById('m-photos');
+  ph.innerHTML=(d.photos||[]).map((u,i)=>`<img src="${u}" data-photos='${JSON.stringify(d.photos)}' data-index="${i}" onclick="openLB(JSON.parse(this.dataset.photos),+this.dataset.index)">`).join('');
+  // Email 連結
+  const subj=`LUXUS PAINT 請款通知 - ${d.invoiceNo||''}`;
+  const body=`您好 ${d.applicant||''}，\n\n您的請款單（${d.invoiceNo||''}，NT$ ${(d.amount||0).toLocaleString()} 元）狀態已更新。\n\n請登入系統查看：${location.origin+location.pathname.replace('admin.html','invoice.html')}\n\nLUXUS PAINT 會計部門`;
+  document.getElementById('emailLink').href=`mailto:${d.email||''}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`;
+  document.getElementById('reviewModal').classList.add('open');
+};
+document.getElementById('modalClose').onclick=()=>document.getElementById('reviewModal').classList.remove('open');
+document.getElementById('reviewModal').addEventListener('click',e=>{if(e.target===document.getElementById('reviewModal'))document.getElementById('reviewModal').classList.remove('open');});
+
+async function reviewAction(status){
+  if(!modalDoc)return;
+  const note=document.getElementById('reviewNote').value.trim();
+  if(status==='rejected'&&!note){showToast('退件必須填寫原因',true);return;}
+  const update={status,reviewedBy:currentUser.email,reviewedByName:adminData.name||currentUser.email,reviewedAt:serverTimestamp(),reviewNote:note};
+  if(status==='rejected')update.rejectionReason=note;
+  const pm=document.getElementById('paymentMonth').value;
+  if(pm)update.paymentMonth=pm;
+  if(status==='paid')update.paidAt=serverTimestamp();
+  try{
+    await updateDoc(doc(db,'invoices',modalDoc.id),update);
+    showToast(status==='approved'?'✅ 已通過':status==='rejected'?'❌ 已退件':status==='paid'?'💰 已標記付款':'↩ 已退回審查中');
+    document.getElementById('reviewModal').classList.remove('open');
+  }catch(e){showToast('操作失敗：'+e.message,true);}
+}
+document.getElementById('btnApprove').onclick=()=>reviewAction('approved');
+document.getElementById('btnReject').onclick=()=>reviewAction('rejected');
+document.getElementById('btnPaid').onclick=()=>reviewAction('paid');
+document.getElementById('btnRePending').onclick=()=>reviewAction('pending');
+
+// ── 管理員管理 ──
+async function initAdminMgmt(){
+  document.getElementById('btnAddAdmin').addEventListener('click',async()=>{
+    const uid=document.getElementById('newAdminUid').value.trim();
+    const name=document.getElementById('newAdminName').value.trim();
+    const email=document.getElementById('newAdminEmail').value.trim();
+    const role=document.getElementById('newAdminRole').value;
+    if(!uid||!name){showToast('請填寫 UID 和姓名',true);return;}
+    try{
+      await setDoc(doc(db,'admins',uid),{name,email,role,createdAt:serverTimestamp(),addedBy:currentUser.email});
+      showToast('✅ 已新增管理員');
+      document.getElementById('newAdminUid').value='';document.getElementById('newAdminName').value='';document.getElementById('newAdminEmail').value='';
+      renderAdminList();
+    }catch(e){showToast('新增失敗：'+e.message,true);}
+  });
+  document.getElementById('btnSetInvite').addEventListener('click',async()=>{
+    const code=document.getElementById('inviteCodeSet').value.trim();
+    const role=document.getElementById('inviteRoleSet').value;
+    if(!code||code.length<6){showToast('邀請碼至少6字',true);return;}
+    const exp=new Date();exp.setDate(exp.getDate()+7);
+    try{
+      await setDoc(doc(db,'settings','invite'),{code,role,expiresAt:exp,setBy:currentUser.email});
+      showToast('✅ 邀請碼已設定（7天有效）');
+      document.getElementById('currentInvite').textContent=`目前邀請碼：${code}（角色：${role==='boss'?'老闆':'會計'}，7天有效）`;
+    }catch(e){showToast('設定失敗：'+e.message,true);}
+  });
+  // 讀取目前邀請碼
+  try{
+    const inv=await getDoc(doc(db,'settings','invite'));
+    if(inv.exists()){const d=inv.data();document.getElementById('currentInvite').textContent=`目前邀請碼：${d.code}（角色：${d.role==='boss'?'老闆':'會計'}）`;}
+  }catch{}
+}
+async function renderAdminList(){
+  try{
+    const snap=await getDocs(collection(db,'admins'));
+    const list=document.getElementById('adminList');
+    if(snap.empty){list.innerHTML='<div style="color:#aaa;font-size:13px;padding:8px">尚無管理員</div>';return;}
+    list.innerHTML=snap.docs.map(d=>{
+      const ad=d.data();
+      return `<div class="admin-item">
+        <div class="admin-avatar">${(ad.name||'?')[0]}</div>
+        <div class="admin-info"><div class="name">${ad.name||'—'}</div><div class="role">${ad.email||'—'}</div></div>
+        <span class="role-badge ${ad.role==='boss'?'role-boss':'role-acc'}">${ad.role==='boss'?'老闆':'會計'}</span>
+        ${d.id!==currentUser.uid?`<button class="btn-del-admin" onclick="delAdmin('${d.id}','${(ad.name||'').replace(/'/g,'')}')">移除</button>`:'<span style="margin-left:auto;font-size:12px;color:#aaa">（自己）</span>'}
+      </div>`;
+    }).join('');
+  }catch(e){console.error(e);}
+}
+window.delAdmin=async(uid,name)=>{
+  if(!confirm(`確認要移除 ${name} 的後台權限？`))return;
+  try{await deleteDoc(doc(db,'admins',uid));showToast('已移除管理員');renderAdminList();}
+  catch(e){showToast('移除失敗：'+e.message,true);}
+};
+
+// Lightbox
+let lbP=[],lbI=0;
+const lbEl=document.getElementById('lb'),lbImg=document.getElementById('lbImg');
+window.openLB=(p,i)=>{lbP=p;lbI=i;lbImg.src=lbP[lbI];lbEl.classList.add('open');};
+document.getElementById('lbX').onclick=()=>lbEl.classList.remove('open');
+document.getElementById('lbP').onclick=()=>{lbI=(lbI-1+lbP.length)%lbP.length;lbImg.src=lbP[lbI];};
+document.getElementById('lbN').onclick=()=>{lbI=(lbI+1)%lbP.length;lbImg.src=lbP[lbI];};
+lbEl.addEventListener('click',e=>{if(e.target===lbEl)lbEl.classList.remove('open');});
+
+function showToast(msg,isErr=false){const t=document.getElementById('toast');t.textContent=msg;t.className='toast'+(isErr?' err':'');t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3500);}
+</script>
+</body>
+</html>
