@@ -236,27 +236,28 @@ function parseROCDate(t){
 }
 function parseAmount(t){
   const ps=[
-    // 關鍵字 → 允許冒號/空白/NT$/＄/$ 等各種分隔 → 數字
-    /(?:合計|總計|小計|含稅|應付)[:\s：]*(?:NT\$|NTD|\$|＄)?\s*(\d[\d,]+)/i,
-    // 關鍵字後最多 15 個非數字字元（處理 OCR 斷行/多餘文字）
-    /(?:合計|總計|小計|含稅|應付)[^0-9]{0,15}(\d[\d,]+)/,
+    // 繁體+簡體關鍵字，允許冒號/空白/NT$/＄ 等各種分隔
+    /(?:合計|總計|总計|总计|小計|小计|含稅|含税|應付|应付)[:\s：]*(?:NT\$|NTD|\$|＄)?\s*(\d[\d,]+)/i,
+    // 關鍵字後最多 15 個非數字字元（處理 OCR 斷行、多餘文字）
+    /(?:合計|總計|总計|总计|小計|小计|含稅|含税|應付|应付)[^0-9]{0,15}(\d[\d,]+)/,
     /NT\$\s*(\d[\d,]+)/i,
     /NTD\s*(\d[\d,]+)/i,
-    /＄\s*(\d[\d,]+)/,          // 全形錢號
+    /＄\s*(\d[\d,]+)/,
   ];
   for(const p of ps){const m=t.match(p);if(m){const v=parseInt(m[1].replace(/,/g,''));if(v>0)return v;}}
   return null;
 }
 function parseTaxId(t){
-  // 由精確到寬鬆，只抓買方統編
+  // 由精確到寬鬆，只抓買方統編（繁體+簡體）
   const ps=[
-    /(?:買方統編|買方統一編號|買受人統編|買受人統一編號)[:\s：\u3000]*(\d{8})/,
-    /買方[:\s：\u3000]{0,6}(\d{8})/,      // 「買方 12345678」含全形空格
-    /買受人[:\s：\u3000]{0,6}(\d{8})/,
+    /(?:買方統編|買方統一編號|買受人統編|買受人統一編號|买方统编|买方统一编号)[:\s：\u3000]*(\d{8})/,
+    /(?:買方|买方)[:\s：\u3000]{0,6}(\d{8})/,   // 「買方 12345678」
+    /(?:買受人|买受人)[:\s：\u3000]{0,6}(\d{8})/,
     /統一編號[:\s：\u3000]*(\d{8})/,
+    /统一编号[:\s：\u3000]*(\d{8})/,
   ];
   for(const p of ps){const m=t.match(p);if(m)return m[1];}
-  return null; // 找不到買方統編就不填
+  return null;
 }
 function parseInvoiceNo(t){
   // 台灣統一發票號碼：2個英文字母 + 8位數字，如 AB-12345678 或 AB12345678
@@ -362,7 +363,10 @@ async function runOCR(file){
     else rows.push('❓ 買方統編：未找到，請手動填寫');
     if(inv){document.getElementById('invoiceNo').value=inv;rows.push(`✅ 發票號碼：${inv}`);}
     else rows.push('❓ 發票號碼：未找到，請手動填寫');
-    box.innerHTML=rows.map(r=>`<div class="scan-result-row">${r}</div>`).join('');
+    // 顯示結果 + OCR 原始文字（可展開）
+    const rawPreview=text.replace(/</g,'&lt;').replace(/\n/g,'↵ ').slice(0,400);
+    box.innerHTML=rows.map(r=>`<div class="scan-result-row">${r}</div>`).join('')+
+      `<details style="margin-top:8px"><summary style="font-size:11px;color:#aaa;cursor:pointer">🔍 OCR 原始文字（除錯用）</summary><pre style="font-size:10px;color:#888;white-space:pre-wrap;max-height:120px;overflow-y:auto;background:#f0f0f0;padding:6px;border-radius:6px;margin-top:4px">${rawPreview}...</pre></details>`;
     prog.style.display='none';box.style.display='block';
   }catch(err){
     box.innerHTML='<div style="color:#e74c3c;font-size:13px">⚠️ 辨識失敗，請手動填寫</div>';
