@@ -132,8 +132,6 @@ textarea{resize:vertical;min-height:75px}
         </div>
       </div>
     </div>
-    <!-- 手機拍照用（隱藏） -->
-    <input type="file" id="mobileCameraInput" accept="image/*" capture="environment" style="display:none">
 
     <!-- 相機預覽 -->
     <div id="cameraWrap" style="display:none;text-align:center">
@@ -268,30 +266,45 @@ function resetScan(){
   stopCamera();
 }
 
-// ── 即時相機（手機+電腦都用 getUserMedia 真正即時鏡頭）──
+// ── 即時相機（getUserMedia 真正即時鏡頭）──
 let cameraStream=null;
 
 async function startCamera(){
   const wrap=document.getElementById('cameraWrap');
   const video=document.getElementById('cameraVideo');
-  document.getElementById('scanEmpty').style.display='none';
-  wrap.style.display='block';
+  const label=document.getElementById('cameraLabel');
+  const desc=document.getElementById('cameraDesc');
+
+  // 先更新按鈕文字提示開啟中
+  label.textContent='開啟中...';
+  desc.textContent='請允許相機存取';
+
   try{
     // 優先用後鏡頭（手機），電腦則用預設鏡頭
-    const constraints={video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}}};
-    cameraStream=await navigator.mediaDevices.getUserMedia(constraints);
-    video.srcObject=cameraStream;
-  }catch(err){
-    // 後鏡頭失敗，改試任何可用鏡頭
+    let stream;
     try{
-      cameraStream=await navigator.mediaDevices.getUserMedia({video:true});
-      document.getElementById('cameraVideo').srcObject=cameraStream;
-    }catch(err2){
-      // 完全無法開啟相機，改用檔案選取
-      wrap.style.display='none';
-      document.getElementById('scanEmpty').style.display='block';
-      document.getElementById('mobileCameraInput').click();
+      stream=await navigator.mediaDevices.getUserMedia({
+        video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}}
+      });
+    }catch(e){
+      // 後鏡頭失敗，改試任何可用鏡頭
+      stream=await navigator.mediaDevices.getUserMedia({video:true});
     }
+    cameraStream=stream;
+    video.srcObject=stream;
+    // 確認有畫面後才切換 UI
+    await new Promise(res=>{video.onloadedmetadata=()=>{video.play();res();};});
+    document.getElementById('scanEmpty').style.display='none';
+    wrap.style.display='block';
+  }catch(err){
+    // 完全無法開啟（使用者拒絕或不支援）— 只顯示提示，不跳出選檔視窗
+    label.textContent='即時鏡頭掃描';
+    desc.textContent='開啟相機對準發票';
+    const msg=err.name==='NotAllowedError'?'請允許瀏覽器使用相機權限後再試':
+              err.name==='NotFoundError'?'找不到相機裝置':
+              '無法開啟相機（'+err.message+')';
+    if(window.showToast) window.showToast('⚠️ '+msg+'\n可改用「選擇照片」上傳',true);
+    else alert('⚠️ '+msg+'\n可改用「選擇照片」上傳');
   }
 }
 function stopCamera(){
@@ -361,9 +374,6 @@ async function handleScanFile(file){
   await runOCR(file);
 }
 document.getElementById('scanInput').addEventListener('change',async e=>{
-  await handleScanFile(e.target.files[0]);e.target.value='';
-});
-document.getElementById('mobileCameraInput').addEventListener('change',async e=>{
   await handleScanFile(e.target.files[0]);e.target.value='';
 });
 </script>
@@ -531,6 +541,7 @@ document.getElementById('lbN').onclick=()=>{lbI=(lbI+1)%lbP.length;lbImg.src=lbP
 lbEl.addEventListener('click',e=>{if(e.target===lbEl)lbEl.classList.remove('open');});
 
 function showToast(msg,isErr=false){const t=document.getElementById('toast');t.textContent=msg;t.className='toast'+(isErr?' err':'');t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3500);}
+window.showToast=showToast;
 </script>
 </body>
 </html>
