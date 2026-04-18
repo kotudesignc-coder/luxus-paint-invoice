@@ -268,41 +268,30 @@ function resetScan(){
   stopCamera();
 }
 
-// ── 即時相機 ──
+// ── 即時相機（手機+電腦都用 getUserMedia 真正即時鏡頭）──
 let cameraStream=null;
-const isMobile=/Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-
-// 初始化：手機顯示不同文字
-(function(){
-  if(isMobile){
-    const lbl=document.getElementById('cameraLabel');
-    const desc=document.getElementById('cameraDesc');
-    if(lbl)lbl.textContent='拍照掃描';
-    if(desc)desc.textContent='開啟相機直接拍攝發票';
-  }
-})();
 
 async function startCamera(){
-  // 手機：直接用原生相機（最穩定，支援所有手機）
-  if(isMobile){
-    document.getElementById('mobileCameraInput').click();
-    return;
-  }
-  // 電腦：使用即時影像串流
   const wrap=document.getElementById('cameraWrap');
   const video=document.getElementById('cameraVideo');
   document.getElementById('scanEmpty').style.display='none';
   wrap.style.display='block';
   try{
-    cameraStream=await navigator.mediaDevices.getUserMedia({
-      video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}}
-    });
+    // 優先用後鏡頭（手機），電腦則用預設鏡頭
+    const constraints={video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}}};
+    cameraStream=await navigator.mediaDevices.getUserMedia(constraints);
     video.srcObject=cameraStream;
   }catch(err){
-    // 電腦也失敗時，改用檔案選取
-    alert('無法開啟相機，請改用「選擇照片」。\n原因：'+err.message);
-    stopCamera();
-    document.getElementById('scanEmpty').style.display='block';
+    // 後鏡頭失敗，改試任何可用鏡頭
+    try{
+      cameraStream=await navigator.mediaDevices.getUserMedia({video:true});
+      document.getElementById('cameraVideo').srcObject=cameraStream;
+    }catch(err2){
+      // 完全無法開啟相機，改用檔案選取
+      wrap.style.display='none';
+      document.getElementById('scanEmpty').style.display='block';
+      document.getElementById('mobileCameraInput').click();
+    }
   }
 }
 function stopCamera(){
