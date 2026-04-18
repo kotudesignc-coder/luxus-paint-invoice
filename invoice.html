@@ -235,18 +235,28 @@ function parseROCDate(t){
   return null;
 }
 function parseAmount(t){
-  const ps=[/(?:合計|總計|小計|含稅|應付)[^\d$]*(\d[\d,]+)/,/NT\$\s*(\d[\d,]+)/i,/NTD\s*(\d[\d,]+)/i];
-  for(const p of ps){const m=t.match(p);if(m)return parseInt(m[1].replace(/,/g,''));}
+  const ps=[
+    // 關鍵字 → 允許冒號/空白/NT$/＄/$ 等各種分隔 → 數字
+    /(?:合計|總計|小計|含稅|應付)[:\s：]*(?:NT\$|NTD|\$|＄)?\s*(\d[\d,]+)/i,
+    // 關鍵字後最多 15 個非數字字元（處理 OCR 斷行/多餘文字）
+    /(?:合計|總計|小計|含稅|應付)[^0-9]{0,15}(\d[\d,]+)/,
+    /NT\$\s*(\d[\d,]+)/i,
+    /NTD\s*(\d[\d,]+)/i,
+    /＄\s*(\d[\d,]+)/,          // 全形錢號
+  ];
+  for(const p of ps){const m=t.match(p);if(m){const v=parseInt(m[1].replace(/,/g,''));if(v>0)return v;}}
   return null;
 }
 function parseTaxId(t){
-  // 只抓買方統編（公司申請報帳用）
-  let m=t.match(/(?:買方統編|買方統一編號|買受人統編|買受人統一編號|買方)[:\s：]*(\d{8})/);
-  if(m)return m[1];
-  // 次要：若有明確「統一編號」標籤也抓（通常是買方欄位）
-  m=t.match(/統一編號[:\s：]*(\d{8})/);
-  if(m)return m[1];
-  return null; // 找不到買方統編就不填，避免填入賣方統編
+  // 由精確到寬鬆，只抓買方統編
+  const ps=[
+    /(?:買方統編|買方統一編號|買受人統編|買受人統一編號)[:\s：\u3000]*(\d{8})/,
+    /買方[:\s：\u3000]{0,6}(\d{8})/,      // 「買方 12345678」含全形空格
+    /買受人[:\s：\u3000]{0,6}(\d{8})/,
+    /統一編號[:\s：\u3000]*(\d{8})/,
+  ];
+  for(const p of ps){const m=t.match(p);if(m)return m[1];}
+  return null; // 找不到買方統編就不填
 }
 function parseInvoiceNo(t){
   // 台灣統一發票號碼：2個英文字母 + 8位數字，如 AB-12345678 或 AB12345678
@@ -284,7 +294,7 @@ async function startCamera(){
     let stream;
     try{
       stream=await navigator.mediaDevices.getUserMedia({
-        video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}}
+        video:{facingMode:{ideal:'environment'},width:{ideal:3840},height:{ideal:2160}}
       });
     }catch(e){
       // 後鏡頭失敗，改試任何可用鏡頭
@@ -318,7 +328,7 @@ async function captureCamera(){
   canvas.height=video.videoHeight;
   canvas.getContext('2d').drawImage(video,0,0);
   stopCamera();
-  const dataUrl=canvas.toDataURL('image/jpeg',0.92);
+  const dataUrl=canvas.toDataURL('image/jpeg',0.96);
   canvas.toBlob(async blob=>{
     document.getElementById('scanEmpty').style.display='none';
     document.getElementById('scanActive').style.display='block';
@@ -326,7 +336,7 @@ async function captureCamera(){
     await runOCR(blob);
     // 掃描完成後自動存入照片清單（稽核用）
     if(window.addScanPhotoToList) window.addScanPhotoToList(dataUrl);
-  },'image/jpeg',0.92);
+  },'image/jpeg',0.96);
 }
 async function runOCR(file){
   const prog=document.getElementById('scanProgress');
