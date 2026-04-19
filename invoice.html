@@ -354,6 +354,47 @@ async function captureCamera(){
     if(window.addScanPhotoToList) window.addScanPhotoToList(dataUrl);
   },'image/jpeg',0.96);
 }
+// ── 影像預處理：灰階 + 對比增強 + 放大，提升 OCR 準確度 ──
+function preprocessForOCR(file){
+  return new Promise(resolve=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const img=new Image();
+      img.onload=()=>{
+        // 放大到至少 2000px 寬（Tesseract 對小圖辨識差）
+        const targetW=Math.max(img.width,2000);
+        const scale=targetW/img.width;
+        const cw=Math.round(img.width*scale),ch=Math.round(img.height*scale);
+        const c=document.createElement('canvas');
+        c.width=cw;c.height=ch;
+        const ctx=c.getContext('2d');
+        ctx.imageSmoothingEnabled=true;
+        ctx.imageSmoothingQuality='high';
+        ctx.drawImage(img,0,0,cw,ch);
+        const id=ctx.getImageData(0,0,cw,ch);
+        const d=id.data;
+        // 轉灰階
+        for(let i=0;i<d.length;i+=4){
+          const g=Math.round(0.299*d[i]+0.587*d[i+1]+0.114*d[i+2]);
+          d[i]=d[i+1]=d[i+2]=g;
+        }
+        // 對比拉伸（min-max normalization）
+        let mn=255,mx=0;
+        for(let i=0;i<d.length;i+=4){if(d[i]<mn)mn=d[i];if(d[i]>mx)mx=d[i];}
+        const rng=mx-mn||1;
+        for(let i=0;i<d.length;i+=4){
+          const v=Math.min(255,Math.round(((d[i]-mn)/rng)*255*1.2));// 略微過曝讓文字更清晰
+          d[i]=d[i+1]=d[i+2]=v;
+        }
+        ctx.putImageData(id,0,0);
+        c.toBlob(resolve,'image/png');// PNG 無損格式給 OCR
+      };
+      img.src=e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 async function runOCR(file){
   const prog=document.getElementById('scanProgress');
   const fill=document.getElementById('scanFill');
@@ -361,7 +402,9 @@ async function runOCR(file){
   const box=document.getElementById('scanResultBox');
   prog.style.display='block';box.style.display='none';fill.style.width='0%';
   try{
-    const {data:{text}}=await Tesseract.recognize(file,'chi_tra+eng',{
+    txt.textContent='影像前處理中...';
+    const processed=await preprocessForOCR(file);
+    const {data:{text}}=await Tesseract.recognize(processed,'chi_tra+eng',{
       logger:m=>{
         if(m.status==='recognizing text'){fill.style.width=(m.progress*100)+'%';txt.textContent=`辨識中 ${Math.round(m.progress*100)}%`;}
         else if(m.status.includes('language')){txt.textContent='載入中文辨識模型（首次需約25MB下載）...';}
