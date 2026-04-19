@@ -228,18 +228,27 @@ textarea{resize:vertical;min-height:75px}
 <!-- OCR (UMD Tesseract - 需在 module 前) -->
 <script>
 function parseROCDate(t){
+  // ROC 格式：114年01月15日 或 114/01/15
   let m=t.match(/(\d{2,3})[\/年](\d{1,2})[\/月](\d{1,2})/);
   if(m){const y=parseInt(m[1])<200?parseInt(m[1])+1911:parseInt(m[1]);return `${y}-${String(parseInt(m[2])).padStart(2,'0')}-${String(parseInt(m[3])).padStart(2,'0')}`;}
-  m=t.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
-  if(m)return `${m[1]}-${String(parseInt(m[2])).padStart(2,'0')}-${String(parseInt(m[3])).padStart(2,'0')}`;
+  // AD 格式：允許連字號/斜線/空格/全形連字號/em-dash 作為分隔
+  m=t.match(/(\d{4})[\s\/\-\.\u2013\u2014\uff0d](\d{1,2})[\s\/\-\.\u2013\u2014\uff0d](\d{1,2})/);
+  if(m){
+    const y=parseInt(m[1]),mo=parseInt(m[2]),d=parseInt(m[3]);
+    if(y>=2000&&y<=2100&&mo>=1&&mo<=12&&d>=1&&d<=31)
+      return `${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  }
   return null;
 }
 function parseAmount(t){
   const ps=[
-    // 繁體+簡體關鍵字，允許冒號/空白/NT$/＄ 等各種分隔
+    // 1. 繁體+簡體 keyword，允許各種分隔符與 NT$
     /(?:合計|總計|总計|总计|小計|小计|含稅|含税|應付|应付)[:\s：]*(?:NT\$|NTD|\$|＄)?\s*(\d[\d,]+)/i,
-    // 關鍵字後最多 15 個非數字字元（處理 OCR 斷行、多餘文字）
+    // 2. 台灣電子發票專用：「隨機碼 XXXX　總計 YYYY」→ 取該行最後的 3-6 位數字
+    /(?:隨[\s]?機[\s]?碼|随[\s]?机[\s]?码)[^\n\r]*(\d{3,6})[^\d\n\r]*(?=[\n\r]|$)/m,
+    // 3. keyword 後最多 15 個非數字字元 fallback
     /(?:合計|總計|总計|总计|小計|小计|含稅|含税|應付|应付)[^0-9]{0,15}(\d[\d,]+)/,
+    // 4. 金額符號直接匹配
     /NT\$\s*(\d[\d,]+)/i,
     /NTD\s*(\d[\d,]+)/i,
     /＄\s*(\d[\d,]+)/,
@@ -248,15 +257,21 @@ function parseAmount(t){
   return null;
 }
 function parseTaxId(t){
-  // 由精確到寬鬆，只抓買方統編（繁體+簡體）
   const ps=[
+    // 1. 精確關鍵字（繁體+簡體）
     /(?:買方統編|買方統一編號|買受人統編|買受人統一編號|买方统编|买方统一编号)[:\s：\u3000]*(\d{8})/,
-    /(?:買方|买方)[:\s：\u3000]{0,6}(\d{8})/,   // 「買方 12345678」
+    // 2. 台灣電子發票格式：「賣方 XXXXXXXX 買方 YYYYYYYY」→ 取買方（第二個 8 位數）
+    /(?:賣方|卖方)[:\s\u3000]*\d{8}[^\d\n\r]{1,8}(?:買方|买方)[:\s\u3000]*(\d{8})/,
+    // 3. 一般買方關鍵字（含全形空格）
+    /(?:買方|买方|買 方|买 方)[:\s：\u3000]{0,6}(\d{8})/,
     /(?:買受人|买受人)[:\s：\u3000]{0,6}(\d{8})/,
+    // 4. 統一編號標籤
     /統一編號[:\s：\u3000]*(\d{8})/,
     /统一编号[:\s：\u3000]*(\d{8})/,
+    // 5. 終極備援：同行兩個 8 位數字取第二個（買方通常在賣方後）
+    /\d{8}[^\d\n\r]{1,8}(\d{8})/,
   ];
-  for(const p of ps){const m=t.match(p);if(m)return m[1];}
+  for(const p of ps){const m=t.match(p);if(m)return m[m.length-1];}
   return null;
 }
 function parseInvoiceNo(t){
