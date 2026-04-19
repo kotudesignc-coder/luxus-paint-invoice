@@ -242,13 +242,12 @@ function parseROCDate(t){
 }
 function parseAmount(t){
   const ps=[
-    // 1. 繁體+簡體 keyword，允許各種分隔符與 NT$
-    /(?:合計|總計|总計|总计|小計|小计|含稅|含税|應付|应付)[:\s：]*(?:NT\$|NTD|\$|＄)?\s*(\d[\d,]+)/i,
-    // 2. 台灣電子發票專用：「隨機碼 XXXX　總計 YYYY」→ 取該行最後的 3-6 位數字
-    /(?:隨[\s]?機[\s]?碼|随[\s]?机[\s]?码)[^\n\r]*(\d{3,6})[^\d\n\r]*(?=[\n\r]|$)/m,
-    // 3. keyword 後最多 15 個非數字字元 fallback
+    // 1. 允許字之間有空格（OCR 常把每個字拆開：「總 計 1254」）
+    /(?:合[\s]?計|總[\s]?計|总[\s]?計|总[\s]?计|小[\s]?計|小[\s]?计|含[\s]?稅|含[\s]?税|應[\s]?付|应[\s]?付)[:\s：]*(?:NT\$|NTD|\$|＄)?\s*(\d[\d,]+)/i,
+    // 2. 台灣電子發票：隨機碼行的最後 3-6 位數就是總計
+    /(?:隨[\s]?機[\s]?[碼鶴馬]|随[\s]?机[\s]?码)[^\n\r]*(\d{3,6})[^\d\n\r]*(?=[\n\r]|$)/m,
+    // 3. keyword 後最多 15 非數字 fallback
     /(?:合計|總計|总計|总计|小計|小计|含稅|含税|應付|应付)[^0-9]{0,15}(\d[\d,]+)/,
-    // 4. 金額符號直接匹配
     /NT\$\s*(\d[\d,]+)/i,
     /NTD\s*(\d[\d,]+)/i,
     /＄\s*(\d[\d,]+)/,
@@ -260,16 +259,16 @@ function parseTaxId(t){
   const ps=[
     // 1. 精確關鍵字（繁體+簡體）
     /(?:買方統編|買方統一編號|買受人統編|買受人統一編號|买方统编|买方统一编号)[:\s：\u3000]*(\d{8})/,
-    // 2. 台灣電子發票格式：「賣方 XXXXXXXX 買方 YYYYYYYY」→ 取買方（第二個 8 位數）
-    /(?:賣方|卖方)[:\s\u3000]*\d{8}[^\d\n\r]{1,8}(?:買方|买方)[:\s\u3000]*(\d{8})/,
-    // 3. 一般買方關鍵字（含全形空格）
-    /(?:買方|买方|買 方|买 方)[:\s：\u3000]{0,6}(\d{8})/,
+    // 2. 台灣電子發票：「賣方 XXXXXXXX 買方 YYYYYYYY」，允許字間有空格
+    /(?:賣[\s]?方|卖[\s]?方)[:\s\u3000]*\d{8}[^\d\n\r]{1,12}(?:買[\s]?方|买[\s]?方)[:\s\u3000]*(\d{8})/,
+    // 3. 一般買方，允許字間空格
+    /(?:買[\s]?方|买[\s]?方)[:\s：\u3000]{0,8}(\d{8})/,
     /(?:買受人|买受人)[:\s：\u3000]{0,6}(\d{8})/,
-    // 4. 統一編號標籤
-    /統一編號[:\s：\u3000]*(\d{8})/,
-    /统一编号[:\s：\u3000]*(\d{8})/,
-    // 5. 終極備援：同行兩個 8 位數字取第二個（買方通常在賣方後）
-    /\d{8}[^\d\n\r]{1,8}(\d{8})/,
+    // 4. 統一編號
+    /統[\s]?一[\s]?編[\s]?號[:\s：\u3000]*(\d{8})/,
+    /统[\s]?一[\s]?编[\s]?号[:\s：\u3000]*(\d{8})/,
+    // 5. 終極備援：全文中兩個相鄰 8 位數字，取第二個
+    /\d{8}[^\d\n\r]{1,12}(\d{8})/,
   ];
   for(const p of ps){const m=t.match(p);if(m)return m[m.length-1];}
   return null;
@@ -378,13 +377,14 @@ function preprocessForOCR(file){
           const g=Math.round(0.299*d[i]+0.587*d[i+1]+0.114*d[i+2]);
           d[i]=d[i+1]=d[i+2]=g;
         }
-        // 對比拉伸（min-max normalization）
+        // S 曲線對比增強（保留粗體大字細節，同時提亮小字）
         let mn=255,mx=0;
         for(let i=0;i<d.length;i+=4){if(d[i]<mn)mn=d[i];if(d[i]>mx)mx=d[i];}
         const rng=mx-mn||1;
         for(let i=0;i<d.length;i+=4){
-          const v=Math.min(255,Math.round(((d[i]-mn)/rng)*255*1.2));// 略微過曝讓文字更清晰
-          d[i]=d[i+1]=d[i+2]=v;
+          const n=(d[i]-mn)/rng;                          // 正規化 0~1
+          const s=1/(1+Math.exp(-10*(n-0.5)));            // Sigmoid S 曲線
+          d[i]=d[i+1]=d[i+2]=Math.round(s*255);
         }
         ctx.putImageData(id,0,0);
         c.toBlob(resolve,'image/png');// PNG 無損格式給 OCR
@@ -422,7 +422,7 @@ async function runOCR(file){
     if(inv){document.getElementById('invoiceNo').value=inv;rows.push(`✅ 發票號碼：${inv}`);}
     else rows.push('❓ 發票號碼：未找到，請手動填寫');
     // 顯示結果 + OCR 原始文字（可展開）
-    const rawPreview=text.replace(/</g,'&lt;').replace(/\n/g,'↵ ').slice(0,400);
+    const rawPreview=text.replace(/</g,'&lt;').replace(/\n/g,'↵ ').slice(0,800);
     box.innerHTML=rows.map(r=>`<div class="scan-result-row">${r}</div>`).join('')+
       `<details style="margin-top:8px"><summary style="font-size:11px;color:#aaa;cursor:pointer">🔍 OCR 原始文字（除錯用）</summary><pre style="font-size:10px;color:#888;white-space:pre-wrap;max-height:120px;overflow-y:auto;background:#f0f0f0;padding:6px;border-radius:6px;margin-top:4px">${rawPreview}...</pre></details>`;
     prog.style.display='none';box.style.display='block';
