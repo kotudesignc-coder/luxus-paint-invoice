@@ -492,7 +492,7 @@ document.getElementById('applicationDate').value=today;
 document.getElementById('date').value=today;
 
 // 照片壓縮
-const MAX_W=1200,QUAL=0.72,MAX_P=5;
+const MAX_W=1000,QUAL=0.65,MAX_P=5;// 壓縮規格：Firestore 文件上限 1MB，5 張需各控制在 ~150KB
 let photos=[];
 const ua=document.getElementById('uploadArea'),fi=document.getElementById('fileInput'),pg=document.getElementById('previewGrid');
 ua.addEventListener('click',()=>fi.click());
@@ -517,15 +517,25 @@ function addPreview(url,idx,label=''){
 pg.addEventListener('click',e=>{if(e.target.classList.contains('pi-del')){const i=+e.target.dataset.idx;photos[i]=null;e.target.closest('.pi').remove();updPCnt();}});
 function updPCnt(){const n=photos.filter(Boolean).length;document.getElementById('pcnt').textContent=n?`已選 ${n} 張（含掃描照片，已壓縮）`:'';}
 
-// 供 OCR script 呼叫：將掃描照片加入送出清單
+// 供 OCR script 呼叫：將掃描照片壓縮後加入送出清單
 window.addScanPhotoToList=function(dataUrl){
   if(photos.filter(Boolean).length>=MAX_P){showToast('照片已達上限 5 張',true);return;}
-  photos.push(dataUrl);
-  addPreview(dataUrl,photos.length-1,'📷 掃描');
-  updPCnt();
-  // 捲動到照片區讓使用者知道已存入
-  document.getElementById('previewGrid').scrollIntoView({behavior:'smooth',block:'nearest'});
-  showToast('📷 掃描照片已存入，將隨請款單一起上傳');
+  // ★ 掃描照片也必須壓縮，否則 4K 原圖超過 Firestore 1MB 限制
+  const img=new Image();
+  img.onload=function(){
+    let w=img.width,h=img.height;
+    if(w>MAX_W){h=Math.round(h*MAX_W/w);w=MAX_W;}
+    const c=document.createElement('canvas');
+    c.width=w;c.height=h;
+    c.getContext('2d').drawImage(img,0,0,w,h);
+    const compressed=c.toDataURL('image/jpeg',QUAL);
+    photos.push(compressed);
+    addPreview(compressed,photos.length-1,'📷 掃描');
+    updPCnt();
+    document.getElementById('previewGrid').scrollIntoView({behavior:'smooth',block:'nearest'});
+    showToast('📷 掃描照片已存入，將隨請款單一起上傳');
+  };
+  img.src=dataUrl;
 };
 
 // 送出
