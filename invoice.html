@@ -228,13 +228,32 @@ textarea{resize:vertical;min-height:75px}
 <!-- OCR (UMD Tesseract - 需在 module 前) -->
 <script>
 function parseROCDate(t){
-  // ROC 格式：114年01月15日 或 114/01/15
-  let m=t.match(/(\d{2,3})[\/年](\d{1,2})[\/月](\d{1,2})/);
+  // 1. 嚴格 AD 格式緊靠時間戳（最可靠）：2025-12-12 08:49:22
+  let m=t.match(/(\d{4})[\-\/](\d{1,2})[\-\/](\d{1,2})\s+\d{2}:\d{2}/);
+  if(m){
+    const y=+m[1],mo=+m[2],d=+m[3];
+    if(y>=2000&&y<=2100&&mo>=1&&mo<=12&&d>=1&&d<=31)
+      return `${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  }
+  // 2. 時間戳反推：OCR 讀壞年份時（U25-17-12 → 提取所有數字群組）
+  const tm=t.match(/(.{4,25}?)\s+(\d{2}:\d{2}:\d{2})/);
+  if(tm){
+    const nums=(tm[1].match(/\d+/g)||[]);
+    if(nums.length>=3){
+      let y=+nums[nums.length-3],mo=+nums[nums.length-2],d=+nums[nums.length-1];
+      if(y<200)y+=2000;
+      if(mo>12&&d<=12){[mo,d]=[d,mo];}  // 月日互換修正
+      if(y>=2000&&y<=2100&&mo>=1&&mo<=12&&d>=1&&d<=31)
+        return `${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    }
+  }
+  // 3. ROC 格式：114年01月15日 或 114/01/15
+  m=t.match(/(\d{2,3})[\/年](\d{1,2})[\/月](\d{1,2})/);
   if(m){const y=parseInt(m[1])<200?parseInt(m[1])+1911:parseInt(m[1]);return `${y}-${String(parseInt(m[2])).padStart(2,'0')}-${String(parseInt(m[3])).padStart(2,'0')}`;}
-  // AD 格式：允許連字號/斜線/空格/全形連字號/em-dash 作為分隔
+  // 4. 一般 AD 格式
   m=t.match(/(\d{4})[\s\/\-\.\u2013\u2014\uff0d](\d{1,2})[\s\/\-\.\u2013\u2014\uff0d](\d{1,2})/);
   if(m){
-    const y=parseInt(m[1]),mo=parseInt(m[2]),d=parseInt(m[3]);
+    const y=+m[1],mo=+m[2],d=+m[3];
     if(y>=2000&&y<=2100&&mo>=1&&mo<=12&&d>=1&&d<=31)
       return `${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
   }
@@ -244,7 +263,9 @@ function parseAmount(t){
   const ps=[
     // 1. 允許字之間有空格（OCR 常把每個字拆開：「總 計 1254」）
     /(?:合[\s]?計|總[\s]?計|总[\s]?計|总[\s]?计|小[\s]?計|小[\s]?计|含[\s]?稅|含[\s]?税|應[\s]?付|应[\s]?付)[:\s：]*(?:NT\$|NTD|\$|＄)?\s*(\d[\d,]+)/i,
-    // 2. 台灣電子發票：隨機碼行的最後 3-6 位數就是總計
+    // 2. 台灣電子發票：「）1254」— 括號後面直接跟總計金額（最可靠）
+    /[）)]\s*(\d{3,6})\b/,
+    // 3. 隨機碼行的最後 3-6 位數就是總計
     /(?:隨[\s]?機[\s]?[碼鶴馬]|随[\s]?机[\s]?码)[^\n\r]*(\d{3,6})[^\d\n\r]*(?=[\n\r]|$)/m,
     // 3. keyword 後最多 15 非數字 fallback
     /(?:合計|總計|总計|总计|小計|小计|含稅|含税|應付|应付)[^0-9]{0,15}(\d[\d,]+)/,
@@ -267,8 +288,8 @@ function parseTaxId(t){
     // 4. 統一編號
     /統[\s]?一[\s]?編[\s]?號[:\s：\u3000]*(\d{8})/,
     /统[\s]?一[\s]?编[\s]?号[:\s：\u3000]*(\d{8})/,
-    // 5. 終極備援：全文中兩個相鄰 8 位數字，取第二個
-    /\d{8}[^\d\n\r]{1,12}(\d{8})/,
+    // 5. 終極備援：全文中兩個相鄰 7-8 位數字，取第二個（OCR 可能漏讀一位）
+    /\d{7,8}[^\d\n\r]{1,12}(\d{7,8})/,
   ];
   for(const p of ps){const m=t.match(p);if(m)return m[m.length-1];}
   return null;
