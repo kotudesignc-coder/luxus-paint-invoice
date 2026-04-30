@@ -4,6 +4,7 @@
 <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>LUXUS PAINT 請款申請</title>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Segoe UI','Microsoft JhengHei',sans-serif;background:#f0f2f5;min-height:100vh}
@@ -93,6 +94,11 @@ textarea{resize:vertical;min-height:75px}
 .empty{text-align:center;padding:36px;color:#bbb}.empty .ei{font-size:44px;margin-bottom:10px}
 .live-dot{width:8px;height:8px;background:#27ae60;border-radius:50%;display:inline-block;animation:pulse 1.5s infinite;margin-left:6px}
 @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.8)}}
+/* QR */
+.qr-indicator{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.6);color:#fff;font-size:12px;padding:4px 12px;border-radius:20px;white-space:nowrap;pointer-events:none;transition:.3s}
+.qr-found{background:rgba(39,174,96,.9)!important;font-weight:700}
+@keyframes qr-flash{0%{opacity:1}50%{opacity:.3}100%{opacity:1}}
+.qr-flash-overlay{position:absolute;inset:0;background:rgba(39,174,96,.4);border-radius:12px;animation:qr-flash .4s ease;pointer-events:none}
 </style>
 </head>
 <body>
@@ -114,7 +120,7 @@ textarea{resize:vertical;min-height:75px}
 
   <!-- 掃描 -->
   <div class="card">
-    <div class="card-title" style="margin-bottom:14px">📷 掃描發票自動填入 <span style="font-size:12px;color:#888;font-weight:400;margin-left:4px">AI 辨識日期、金額、統編、發票號碼</span></div>
+    <div class="card-title" style="margin-bottom:14px">📷 掃描發票自動填入 <span style="font-size:12px;color:#888;font-weight:400;margin-left:4px">QR Code 直讀（電子發票）或 OCR 辨識（紙本）</span></div>
     <input type="file" id="scanInput" accept="image/*" style="display:none">
 
     <!-- 選擇模式 -->
@@ -140,10 +146,11 @@ textarea{resize:vertical;min-height:75px}
         <div style="position:absolute;inset:0;border:3px solid #e94560;border-radius:12px;pointer-events:none;box-shadow:inset 0 0 0 2000px rgba(0,0,0,0.2)"></div>
         <!-- 對準框 -->
         <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:80%;height:55%;border:2px dashed #fff;border-radius:8px;pointer-events:none"></div>
-        <div style="position:absolute;bottom:16px;left:50%;transform:translateX(-50%);font-size:12px;color:rgba(255,255,255,0.8);white-space:nowrap">將發票對準虛線框內</div>
+        <div class="qr-indicator" id="qrIndicator">🔍 自動偵測 QR Code 中...</div>
+        <div style="position:absolute;bottom:16px;left:50%;transform:translateX(-50%);font-size:12px;color:rgba(255,255,255,0.8);white-space:nowrap">將發票 QR Code 對準虛線框內</div>
       </div>
       <div style="display:flex;gap:10px;margin-top:12px;justify-content:center">
-        <button type="button" onclick="captureCamera()" style="background:linear-gradient(135deg,#e94560,#c73652);color:#fff;border:none;padding:12px 28px;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer">📸 拍攝辨識</button>
+        <button type="button" onclick="captureCamera()" style="background:linear-gradient(135deg,#e94560,#c73652);color:#fff;border:none;padding:12px 28px;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer">📸 手動拍攝（OCR）</button>
         <button type="button" onclick="stopCamera()" style="background:#f5f5f5;color:#555;border:none;padding:12px 18px;border-radius:12px;font-size:14px;cursor:pointer">✕ 關閉</button>
       </div>
       <canvas id="cameraCanvas" style="display:none"></canvas>
@@ -319,6 +326,128 @@ function resetScan(){
   stopCamera();
 }
 
+// ── 台灣電子發票 QR Code 解析 ──
+// 左側 QR 格式：發票號碼:YYYMMDD:隨機碼:未稅額(hex):含稅額(hex):買方統編:賣方統編:...
+function parseQRInvoice(text){
+  if(typeof jsQR==='undefined') return null;
+  const parts=text.split(':');
+  if(parts.length<7) return null;
+  const no=parts[0].trim().toUpperCase();
+  const dateStr=parts[1].trim();
+  const totalHex=parts[4].trim();
+  const buyerTaxId=parts[5].trim();
+  // 驗證發票號碼格式：2英文字母+8數字
+  if(!/^[A-Z]{2}\d{8}$/.test(no)) return null;
+  // 驗證日期：ROC年 YYYMMDD 7位
+  if(!/^\d{7}$/.test(dateStr)) return null;
+  const rocY=parseInt(dateStr.slice(0,3));
+  const mo=parseInt(dateStr.slice(3,5));
+  const dy=parseInt(dateStr.slice(5,7));
+  if(rocY<100||mo<1||mo>12||dy<1||dy>31) return null;
+  const adY=rocY+1911;
+  // 金額：hex → 十進位
+  const amount=parseInt(totalHex,16);
+  if(isNaN(amount)||amount<=0) return null;
+  return{
+    invoiceNo:no.slice(0,2)+'-'+no.slice(2),
+    date:`${adY}-${String(mo).padStart(2,'0')}-${String(dy).padStart(2,'0')}`,
+    amount:amount,
+    taxId:(buyerTaxId&&buyerTaxId!=='00000000')?buyerTaxId:''
+  };
+}
+
+// 從 ImageData（jsQR 格式）嘗試解碼 QR
+function tryQRFromImageData(imageData){
+  if(typeof jsQR==='undefined') return null;
+  const code=jsQR(imageData.data,imageData.width,imageData.height,{inversionAttempts:'dontInvert'});
+  return code?code.data:null;
+}
+
+// 從 File/Blob 嘗試解碼 QR（回傳 Promise<string|null>）
+function scanQRFromFile(file){
+  return new Promise(resolve=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const img=new Image();
+      img.onload=()=>{
+        const c=document.createElement('canvas');
+        c.width=img.width;c.height=img.height;
+        c.getContext('2d').drawImage(img,0,0);
+        const id=c.getContext('2d').getImageData(0,0,c.width,c.height);
+        resolve(tryQRFromImageData(id));
+      };
+      img.onerror=()=>resolve(null);
+      img.src=e.target.result;
+    };
+    reader.onerror=()=>resolve(null);
+    reader.readAsDataURL(file);
+  });
+}
+
+// 填入表單並顯示 QR 結果
+function fillFromQR(result, dataUrl){
+  document.getElementById('scanEmpty').style.display='none';
+  document.getElementById('scanActive').style.display='block';
+  if(dataUrl) document.getElementById('scanImg').src=dataUrl;
+  document.getElementById('scanProgress').style.display='none';
+  const box=document.getElementById('scanResultBox');
+  const rows=[];
+  document.getElementById('date').value=result.date;rows.push(`✅ 發票日期：${result.date}`);
+  document.getElementById('amount').value=result.amount;rows.push(`✅ 金額：NT$ ${result.amount.toLocaleString()}`);
+  if(result.taxId){document.getElementById('taxId').value=result.taxId;rows.push(`✅ 買方統編：${result.taxId}`);}
+  else rows.push('ℹ️ 買方統編：一般消費（無統編）');
+  document.getElementById('invoiceNo').value=result.invoiceNo;rows.push(`✅ 發票號碼：${result.invoiceNo}`);
+  box.innerHTML=`<div style="background:#d1e7dd;border-radius:6px;padding:8px 12px;margin-bottom:8px;font-size:13px;font-weight:700;color:#0a3622">⚡ QR Code 直讀成功！資料 100% 正確</div>`+
+    rows.map(r=>`<div class="scan-result-row">${r}</div>`).join('');
+  box.style.display='block';
+  if(window.showToast) window.showToast('⚡ QR Code 直讀！所有欄位已自動填入');
+}
+
+// ── 即時 QR 掃描迴圈（相機開啟時持續偵測）──
+let qrLoopId=null;
+function startQRLoop(){
+  if(typeof jsQR==='undefined') return;
+  const video=document.getElementById('cameraVideo');
+  const canvas=document.getElementById('cameraCanvas');
+  const ctx=canvas.getContext('2d');
+  const indicator=document.getElementById('qrIndicator');
+  let scanCount=0;
+  function loop(){
+    if(!cameraStream){qrLoopId=null;return;}
+    if(video.readyState<2){qrLoopId=requestAnimationFrame(loop);return;}
+    // 每 3 幀掃一次（約 10fps），節省 CPU
+    scanCount++;
+    if(scanCount%3!==0){qrLoopId=requestAnimationFrame(loop);return;}
+    canvas.width=video.videoWidth;
+    canvas.height=video.videoHeight;
+    ctx.drawImage(video,0,0);
+    const imageData=ctx.getImageData(0,0,canvas.width,canvas.height);
+    const rawText=tryQRFromImageData(imageData);
+    if(rawText){
+      const result=parseQRInvoice(rawText);
+      if(result){
+        // 成功！綠色閃爍 + 填入 + 關閉相機
+        indicator.textContent='✅ QR Code 已讀取！';
+        indicator.classList.add('qr-found');
+        // 加入綠色閃爍 overlay
+        const wrap=document.getElementById('cameraWrap').querySelector('div');
+        const fl=document.createElement('div');fl.className='qr-flash-overlay';wrap.appendChild(fl);
+        setTimeout(()=>{fl.remove();},400);
+        const dataUrl=canvas.toDataURL('image/jpeg',0.9);
+        setTimeout(()=>{
+          stopCamera();
+          fillFromQR(result,dataUrl);
+          if(window.addScanPhotoToList) window.addScanPhotoToList(dataUrl);
+        },400);
+        qrLoopId=null;
+        return;
+      }
+    }
+    qrLoopId=requestAnimationFrame(loop);
+  }
+  qrLoopId=requestAnimationFrame(loop);
+}
+
 // ── 即時相機（getUserMedia 真正即時鏡頭）──
 let cameraStream=null;
 
@@ -349,6 +478,8 @@ async function startCamera(){
     await new Promise(res=>{video.onloadedmetadata=()=>{video.play();res();};});
     document.getElementById('scanEmpty').style.display='none';
     wrap.style.display='block';
+    // 啟動 QR 偵測迴圈
+    startQRLoop();
   }catch(err){
     // 完全無法開啟（使用者拒絕或不支援）— 只顯示提示，不跳出選檔視窗
     label.textContent='即時鏡頭掃描';
@@ -361,7 +492,10 @@ async function startCamera(){
   }
 }
 function stopCamera(){
+  if(qrLoopId){cancelAnimationFrame(qrLoopId);qrLoopId=null;}
   if(cameraStream){cameraStream.getTracks().forEach(t=>t.stop());cameraStream=null;}
+  const ind=document.getElementById('qrIndicator');
+  if(ind){ind.className='qr-indicator';ind.textContent='🔍 自動偵測 QR Code 中...';}
   document.getElementById('cameraWrap').style.display='none';
 }
 async function captureCamera(){
@@ -372,12 +506,19 @@ async function captureCamera(){
   canvas.getContext('2d').drawImage(video,0,0);
   stopCamera();
   const dataUrl=canvas.toDataURL('image/jpeg',0.96);
+  // 先試 QR Code
+  const imageData=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height);
+  const rawText=tryQRFromImageData(imageData);
+  if(rawText){
+    const result=parseQRInvoice(rawText);
+    if(result){fillFromQR(result,dataUrl);if(window.addScanPhotoToList)window.addScanPhotoToList(dataUrl);return;}
+  }
+  // QR 失敗 → 退回 OCR
   canvas.toBlob(async blob=>{
     document.getElementById('scanEmpty').style.display='none';
     document.getElementById('scanActive').style.display='block';
     document.getElementById('scanImg').src=dataUrl;
     await runOCR(blob);
-    // 掃描完成後自動存入照片清單（稽核用）
     if(window.addScanPhotoToList) window.addScanPhotoToList(dataUrl);
   },'image/jpeg',0.96);
 }
@@ -460,9 +601,21 @@ async function runOCR(file){
   }
 }
 
-// 共用：選圖/手機拍照 → 預覽 + OCR + 存入稽核清單
+// 共用：選圖/手機拍照 → 先試 QR，失敗才 OCR
 async function handleScanFile(file){
   if(!file)return;
+  // 先嘗試 QR Code 解碼（< 0.5 秒）
+  const rawText=await scanQRFromFile(file);
+  if(rawText){
+    const result=parseQRInvoice(rawText);
+    if(result){
+      const dataUrl=await new Promise(r=>{const rd=new FileReader();rd.onload=e=>r(e.target.result);rd.readAsDataURL(file);});
+      fillFromQR(result,dataUrl);
+      if(window.addScanPhotoToList) window.addScanPhotoToList(dataUrl);
+      return;
+    }
+  }
+  // QR 解碼失敗 → 退回 OCR
   document.getElementById('scanEmpty').style.display='none';
   document.getElementById('scanActive').style.display='block';
   const reader=new FileReader();
