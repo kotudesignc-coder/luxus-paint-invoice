@@ -359,7 +359,7 @@ function parseQRInvoice(text){
 // 從 ImageData（jsQR 格式）嘗試解碼 QR
 function tryQRFromImageData(imageData){
   if(typeof jsQR==='undefined') return null;
-  const code=jsQR(imageData.data,imageData.width,imageData.height,{inversionAttempts:'dontInvert'});
+  const code=jsQR(imageData.data,imageData.width,imageData.height,{inversionAttempts:'attemptBoth'});
   return code?code.data:null;
 }
 
@@ -406,33 +406,45 @@ function fillFromQR(result, dataUrl){
 // ── 即時 QR 掃描迴圈（相機開啟時持續偵測）──
 let qrLoopId=null;
 function startQRLoop(){
-  if(typeof jsQR==='undefined') return;
+  if(typeof jsQR==='undefined'){
+    const ind=document.getElementById('qrIndicator');
+    if(ind) ind.textContent='⚠️ jsQR 載入中...';
+    // 等待 jsQR 載入後重試
+    setTimeout(startQRLoop,500);
+    return;
+  }
   const video=document.getElementById('cameraVideo');
   const canvas=document.getElementById('cameraCanvas');
   const ctx=canvas.getContext('2d');
   const indicator=document.getElementById('qrIndicator');
-  let scanCount=0;
+  // 建立縮小版 canvas 供 QR 掃描（max 800px，加速偵測）
+  const qrCanvas=document.createElement('canvas');
+  const qrCtx=qrCanvas.getContext('2d');
+
   function loop(){
     if(!cameraStream){qrLoopId=null;return;}
-    if(video.readyState<2){qrLoopId=requestAnimationFrame(loop);return;}
-    // 每 3 幀掃一次（約 10fps），節省 CPU
-    scanCount++;
-    if(scanCount%3!==0){qrLoopId=requestAnimationFrame(loop);return;}
-    canvas.width=video.videoWidth;
-    canvas.height=video.videoHeight;
-    ctx.drawImage(video,0,0);
-    const imageData=ctx.getImageData(0,0,canvas.width,canvas.height);
+    if(!video.videoWidth||video.readyState<2){qrLoopId=requestAnimationFrame(loop);return;}
+
+    // 縮小到 max 800px 供 QR 偵測（原圖保留給拍攝）
+    const scale=Math.min(1,800/video.videoWidth);
+    qrCanvas.width=Math.round(video.videoWidth*scale);
+    qrCanvas.height=Math.round(video.videoHeight*scale);
+    qrCtx.drawImage(video,0,0,qrCanvas.width,qrCanvas.height);
+    const imageData=qrCtx.getImageData(0,0,qrCanvas.width,qrCanvas.height);
     const rawText=tryQRFromImageData(imageData);
+
     if(rawText){
       const result=parseQRInvoice(rawText);
       if(result){
         // 成功！綠色閃爍 + 填入 + 關閉相機
-        indicator.textContent='✅ QR Code 已讀取！';
+        indicator.textContent='✅ 電子發票 QR 讀取成功！';
         indicator.classList.add('qr-found');
-        // 加入綠色閃爍 overlay
-        const wrap=document.getElementById('cameraWrap').querySelector('div');
+        const wrap=document.getElementById('cameraWrap').querySelector('div[style*="relative"]')||document.getElementById('cameraWrap').querySelector('div');
         const fl=document.createElement('div');fl.className='qr-flash-overlay';wrap.appendChild(fl);
         setTimeout(()=>{fl.remove();},400);
+        // 原圖存到大 canvas 拍照用
+        canvas.width=video.videoWidth;canvas.height=video.videoHeight;
+        ctx.drawImage(video,0,0);
         const dataUrl=canvas.toDataURL('image/jpeg',0.9);
         setTimeout(()=>{
           stopCamera();
@@ -441,6 +453,10 @@ function startQRLoop(){
         },400);
         qrLoopId=null;
         return;
+      } else {
+        // QR 讀到了但格式不是電子發票
+        indicator.textContent='⚠️ 讀到 QR（非發票格式）';
+        setTimeout(()=>{if(indicator)indicator.textContent='🔍 自動偵測 QR Code 中...';},1200);
       }
     }
     qrLoopId=requestAnimationFrame(loop);
