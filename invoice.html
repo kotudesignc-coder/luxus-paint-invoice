@@ -404,22 +404,27 @@ function fillFromQR(result, dataUrl){
 }
 
 // ── 即時 QR 掃描迴圈（相機開啟時持續偵測）──
+// 優先使用 Chrome Android 原生 BarcodeDetector，不支援才退回 jsQR
+let nativeDetector=null;
+(async()=>{
+  if('BarcodeDetector' in window){
+    try{nativeDetector=new BarcodeDetector({formats:['qr_code']});}catch(e){}
+  }
+})();
+
 let qrLoopId=null;
 function startQRLoop(){
-  if(typeof jsQR==='undefined'){
-    const ind=document.getElementById('qrIndicator');
-    if(ind) ind.textContent='⚠️ jsQR 載入中...';
-    // 等待 jsQR 載入後重試
-    setTimeout(startQRLoop,500);
-    return;
-  }
   const video=document.getElementById('cameraVideo');
   const canvas=document.getElementById('cameraCanvas');
   const ctx=canvas.getContext('2d');
   const indicator=document.getElementById('qrIndicator');
-  // 建立縮小版 canvas 供 QR 掃描（max 800px，加速偵測）
   const qrCanvas=document.createElement('canvas');
   const qrCtx=qrCanvas.getContext('2d');
+
+  // 更新指示器顯示使用哪種引擎
+  if(nativeDetector) indicator.textContent='🔍 偵測中（原生引擎）...';
+  else if(typeof jsQR!=='undefined') indicator.textContent='🔍 偵測中（jsQR）...';
+  else indicator.textContent='⚠️ 載入 QR 引擎中...';
 
   // 對比增強：幫助熱感應發票低對比 QR 的偵測
   function enhanceContrast(imgData){
@@ -431,64 +436,68 @@ function startQRLoop(){
     return imgData;
   }
 
-  let noDetectFrames=0;
-  const HINT_FRAMES=180; // ~6秒
+  let noDetectMs=0;
+  let lastTs=0;
 
-  function loop(){
-    if(!cameraStream){qrLoopId=null;return;}
-    if(!video.videoWidth||video.readyState<2){qrLoopId=requestAnimationFrame(loop);return;}
-
-    // 縮小到 max 900px 供 QR 偵測
+  async function detectQR(){
+    if(!video.videoWidth||video.readyState<2) return null;
+    // ── 優先：原生 BarcodeDetector（Android Chrome）──
+    if(nativeDetector){
+      try{
+        const codes=await nativeDetector.detect(video);
+        if(codes.length>0) return codes[0].rawValue;
+      }catch(e){}
+    }
+    // ── 退回：jsQR ──
+    if(typeof jsQR==='undefined') return null;
     const scale=Math.min(1,900/video.videoWidth);
     qrCanvas.width=Math.round(video.videoWidth*scale);
     qrCanvas.height=Math.round(video.videoHeight*scale);
     qrCtx.drawImage(video,0,0,qrCanvas.width,qrCanvas.height);
-
-    let rawText=null;
-
     // 嘗試 1：原圖
-    if(!rawText){
-      rawText=tryQRFromImageData(qrCtx.getImageData(0,0,qrCanvas.width,qrCanvas.height));
+    let raw=tryQRFromImageData(qrCtx.getImageData(0,0,qrCanvas.width,qrCanvas.height));
+    // 嘗試 2：對比增強
+    if(!raw){const id=qrCtx.getImageData(0,0,qrCanvas.width,qrCanvas.height);raw=tryQRFromImageData(enhanceContrast(id));}
+    // 嘗試 3：中央裁切+增強
+    if(!raw){
+      const cx=Math.round(qrCanvas.width*.15),cy=Math.round(qrCanvas.height*.15);
+      const cw=Math.round(qrCanvas.width*.7),ch=Math.round(qrCanvas.height*.7);
+      raw=tryQRFromImageData(enhanceContrast(qrCtx.getImageData(cx,cy,cw,ch)));
     }
-    // 嘗試 2：對比增強（熱感應紙低對比必備）
-    if(!rawText){
-      const id=qrCtx.getImageData(0,0,qrCanvas.width,qrCanvas.height);
-      rawText=tryQRFromImageData(enhanceContrast(id));
-    }
-    // 嘗試 3：中央 70% 裁切（發票 QR 通常在中間）
-    if(!rawText){
-      const cx=Math.round(qrCanvas.width*0.15),cy=Math.round(qrCanvas.height*0.15);
-      const cw=Math.round(qrCanvas.width*0.7),ch=Math.round(qrCanvas.height*0.7);
-      const id=qrCtx.getImageData(cx,cy,cw,ch);
-      rawText=tryQRFromImageData(enhanceContrast(id));
-    }
+    return raw;
+  }
 
-    if(rawText){
-      const result=parseQRInvoice(rawText);
-      if(result){
-        indicator.textContent='✅ 電子發票 QR 讀取成功！';
-        indicator.classList.add('qr-found');
-        const wrap=document.getElementById('cameraWrap').querySelector('div');
-        const fl=document.createElement('div');fl.className='qr-flash-overlay';wrap.appendChild(fl);
-        setTimeout(()=>{fl.remove();},400);
-        canvas.width=video.videoWidth;canvas.height=video.videoHeight;
-        ctx.drawImage(video,0,0);
-        const dataUrl=canvas.toDataURL('image/jpeg',0.9);
-        setTimeout(()=>{stopCamera();fillFromQR(result,dataUrl);if(window.addScanPhotoToList)window.addScanPhotoToList(dataUrl);},400);
-        qrLoopId=null;
-        return;
+  async function loop(ts){
+    if(!cameraStream){qrLoopId=null;return;}
+    // BarcodeDetector：每 200ms 掃一次；jsQR：每幀
+    const interval=nativeDetector?200:0;
+    if(ts-lastTs>=interval){
+      lastTs=ts;
+      const rawText=await detectQR();
+      if(rawText){
+        const result=parseQRInvoice(rawText);
+        if(result){
+          indicator.textContent='✅ 電子發票 QR 讀取成功！';
+          indicator.classList.add('qr-found');
+          const wrap=document.getElementById('cameraWrap').querySelector('div');
+          const fl=document.createElement('div');fl.className='qr-flash-overlay';wrap.appendChild(fl);
+          setTimeout(()=>{fl.remove();},400);
+          canvas.width=video.videoWidth;canvas.height=video.videoHeight;
+          ctx.drawImage(video,0,0);
+          const dataUrl=canvas.toDataURL('image/jpeg',0.9);
+          setTimeout(()=>{stopCamera();fillFromQR(result,dataUrl);if(window.addScanPhotoToList)window.addScanPhotoToList(dataUrl);},400);
+          qrLoopId=null;return;
+        } else {
+          indicator.textContent='⚠️ 讀到 QR（非電子發票格式）';
+          setTimeout(()=>{if(indicator&&cameraStream)indicator.textContent=nativeDetector?'🔍 偵測中（原生引擎）...':'🔍 偵測中（jsQR）...';},1500);
+          noDetectMs=0;
+        }
       } else {
-        indicator.textContent='⚠️ 讀到 QR（非電子發票格式）';
-        setTimeout(()=>{if(indicator&&cameraStream)indicator.textContent='🔍 自動偵測 QR Code 中...';},1500);
-        noDetectFrames=0;
-      }
-    } else {
-      noDetectFrames++;
-      if(noDetectFrames===HINT_FRAMES){
-        indicator.textContent='📱 請移近，讓 QR Code 填滿虛線框';
+        noDetectMs+=Math.max(interval,16);
+        if(noDetectMs>6000) indicator.textContent='📱 請移近，讓 QR Code 填滿框內';
       }
     }
-    qrLoopId=requestAnimationFrame(loop);
+    if(cameraStream) qrLoopId=requestAnimationFrame(loop);
   }
   qrLoopId=requestAnimationFrame(loop);
 }
